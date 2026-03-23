@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { parse } = require('csv-parse/sync');
 const db = require('./db');
 const contactsRouter = require('./routes/contacts');
@@ -103,7 +105,16 @@ app.get('/api/stats', (req, res) => {
   res.json({ total, responded, loomSent, salesCalls, revenue, proxycurlEnabled });
 });
 
+// Serve built React frontend in production
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
+
 app.listen(PORT, () => {
-  console.log(`\n  CRM backend running at http://localhost:${PORT}`);
+  console.log(`\n  CRM running at http://localhost:${PORT}`);
   console.log(`  LinkedIn enrichment: ${process.env.PROXYCURL_API_KEY ? 'ENABLED' : 'DISABLED (add PROXYCURL_API_KEY to .env)'}\n`);
 });
