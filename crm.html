@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM LinkedIn</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #f8fafc; }
+    .lc1 { overflow:hidden; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; }
+    .lc2 { overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .modal-bg { background: rgba(0,0,0,0.45); backdrop-filter: blur(4px); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    /* ─── CONSTANTS ──────────────────────────────────── */
+    const SOURCES = ['Phone','WhatsApp','Email','LinkedIn','Instagram'];
+    const TYPES   = ['Leak','Faucet','Cold'];
+    const SOURCE_COLOR = { LinkedIn:'bg-blue-100 text-blue-700', Email:'bg-purple-100 text-purple-700', Phone:'bg-green-100 text-green-700', WhatsApp:'bg-emerald-100 text-emerald-700', Instagram:'bg-pink-100 text-pink-700' };
+    const TYPE_COLOR   = { Leak:'bg-cyan-100 text-cyan-700', Faucet:'bg-teal-100 text-teal-700', Cold:'bg-gray-100 text-gray-600' };
+    const AV_COLORS    = ['bg-indigo-500','bg-purple-500','bg-pink-500','bg-rose-500','bg-orange-500','bg-amber-500','bg-emerald-500','bg-teal-500','bg-cyan-500','bg-blue-500'];
+    const PIPELINE = [
+      { key:'first_contact_date', label:'1st', isDate:true },
+      { key:'bump1', label:'Bump 1' },
+      { key:'bump2', label:'Bump 2' },
+      { key:'bump3', label:'Last Shot' },
+      { key:'response', label:'Response' },
+      { key:'loom_sent', label:'Loom' },
+      { key:'sales_call', label:'Sales Call' },
+    ];
+    const DEFAULTS = { source:'', type:'', name:'', industry:'', linkedin_url:'', website:'', email_or_phone:'', first_contact_date:'', bump1:false, bump2:false, bump3:false, response:false, loom_sent:false, sales_call:false, notes:'', answer:'', revenue:0, linkedin_photo:'', linkedin_headline:'', linkedin_company:'', linkedin_location:'', website_title:'', website_description:'', enriched_at:null };
+
+    /* ─── STORAGE ────────────────────────────────────── */
+    const S = {
+      all:  ()    => JSON.parse(localStorage.getItem('crm_contacts') || '[]'),
+      save: (arr) => localStorage.setItem('crm_contacts', JSON.stringify(arr)),
+      add:  (d)   => { const a = S.all(); const c = { ...DEFAULTS, ...d, id: Date.now(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; S.save([c,...a]); return c; },
+      upd:  (id, d) => { const a = S.all(); const i = a.findIndex(c=>c.id===id); if(i>=0){ a[i]={...a[i],...d,updated_at:new Date().toISOString()}; S.save(a); return a[i]; } },
+      del:  (id)  => S.save(S.all().filter(c=>c.id!==id)),
+      getSetting: k => localStorage.getItem('crm_'+k)||'',
+      setSetting: (k,v) => localStorage.setItem('crm_'+k, v),
+    };
+
+    /* ─── ENRICH ─────────────────────────────────────── */
+    async function enrichLinkedIn(contact) {
+      const key = S.getSetting('proxycurl_key');
+      if (!key) throw new Error('No Proxycurl API key.\nClick ⚙ Settings (top-right) to add it.\nGet a free key at nubela.co/proxycurl');
+      if (!contact.linkedin_url) throw new Error('No LinkedIn URL on this contact.');
+      const res = await fetch(`https://nubela.co/proxycurl/api/v2/linkedin?url=${encodeURIComponent(contact.linkedin_url)}&use_cache=if-present`, { headers:{ Authorization:`Bearer ${key}` } });
+      if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.description || `Proxycurl error ${res.status}`); }
+      const p = await res.json();
+      const exp = (p.experiences||[]).find(e=>!e.ends_at)||(p.experiences||[])[0];
+      return { linkedin_photo: p.profile_pic_url||'', linkedin_headline: p.headline||'', linkedin_company: exp?.company||'', linkedin_location: [p.city,p.country_full_name].filter(Boolean).join(', '), enriched_at: new Date().toISOString() };
+    }
+
+    async function enrichWebsite(contact) {
+      if (!contact.website) throw new Error('No website URL on this contact.');
+      let url = contact.website;
+      if (!url.startsWith('http')) url = 'https://'+url;
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error('Could not reach website proxy.');
+      const data = await res.json();
+      const html = data.contents || '';
+      const meta = (name) => { const m = html.match(new RegExp(`<meta[^>]*(?:name|property)=["']${name}["'][^>]*content=["']([^"']*)["']`,'i')) || html.match(new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*(?:name|property)=["']${name}["']`,'i')); return m?m[1]:''; };
+      const title = meta('og:title') || (html.match(/<title[^>]*>([^<]*)<\/title>/i)||[])[1]?.trim() || '';
+      const desc  = meta('og:description') || meta('description') || '';
+      return { website_title: title.slice(0,150), website_description: desc.slice(0,400) };
+    }
+
+    /* ─── UTILS ──────────────────────────────────────── */
+    const avatarColor = name => { let h=0; for(const c of (name||'?')) h=(h*31+c.charCodeAt(0))%AV_COLORS.length; return AV_COLORS[Math.abs(h)]; };
+    const initials    = name => (name||'?').split(' ').map(p=>p[0]).join('').toUpperCase().slice(0,2);
+    const fmtCurrency = n => n > 0 ? '$'+Number(n).toLocaleString() : '';
+    const fmtDate     = s => s ? new Date(s).toLocaleDateString() : '';
+
+    function parseCSV(text) {
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if (!lines.length) return [];
+      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+      return lines.slice(1).map(line => {
+        const vals = []; let cur='', inQ=false;
+        for(let i=0;i<line.length;i++){
+          if(line[i]==='"'){ inQ=!inQ; }
+          else if(line[i]===','&&!inQ){ vals.push(cur); cur=''; }
+          else { cur+=line[i]; }
+        }
+        vals.push(cur);
+        const row = {};
+        headers.forEach((h,i) => row[h] = (vals[i]||'').trim());
+        return row;
+      }).filter(row => Object.values(row).some(v=>v));
+    }
+
+    function csvRowToContact(row) {
+      const g = (...keys) => { for(const k of keys){ const f=Object.keys(row).find(rk=>rk.toLowerCase().includes(k.toLowerCase())); if(f&&row[f]) return row[f]; } return ''; };
+      const bool = v => ['y','yes','true','1'].includes(String(v).toLowerCase().trim());
+      return {
+        source: g('source'), type: g('type'), name: g('name','first'), industry: g('industry'),
+        linkedin_url: g('social','linkedin'), website: g('website'),
+        email_or_phone: g('email','phone'), first_contact_date: g('first contact','date'),
+        bump1: bool(g('gentle','bump1','1 ')), bump2: bool(g('value','nudge','bump2')),
+        bump3: bool(g('last shot','bump3','4-5')), response: bool(g('response')),
+        loom_sent: bool(g('loom')), sales_call: bool(g('sales call','call')),
+        notes: g('notes','message'), answer: g('answer'),
+        revenue: parseFloat(g('revenue'))||0,
+      };
+    }
+
+    function exportCSV(contacts) {
+      const headers = ['Name','Source','Type','Industry','LinkedIn','Website','Email/Phone','First Contact','Bump1','Bump2','Bump3','Response','Loom','Sales Call','Notes','Answer','Revenue'];
+      const rows = contacts.map(c => [c.name,c.source,c.type,c.industry,c.linkedin_url,c.website,c.email_or_phone,c.first_contact_date,c.bump1?'Y':'N',c.bump2?'Y':'N',c.bump3?'Y':'N',c.response?'Y':'N',c.loom_sent?'Y':'N',c.sales_call?'Y':'N',`"${(c.notes||'').replace(/"/g,'""')}"`,`"${(c.answer||'').replace(/"/g,'""')}"`,c.revenue]);
+      const csv = [headers.join(','), ...rows.map(r=>r.join(','))].join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+      a.download = 'crm-contacts-'+new Date().toISOString().slice(0,10)+'.csv';
+      a.click();
+    }
+
+    /* ─── COMPONENTS ─────────────────────────────────── */
+
+    function Avatar({ contact, size='md' }) {
+      const [err, setErr] = useState(false);
+      const sz = size==='lg' ? 'w-14 h-14 text-lg' : 'w-11 h-11 text-sm';
+      if (contact.linkedin_photo && !err) {
+        return <img src={contact.linkedin_photo} alt={contact.name} onError={()=>setErr(true)}
+          className={`${sz} rounded-full object-cover ring-2 ring-gray-100 flex-shrink-0`} />;
+      }
+      return <div className={`${sz} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${avatarColor(contact.name)}`}>{initials(contact.name)}</div>;
+    }
+
+    function Badge({ label, colorClass }) {
+      if (!label) return null;
+      return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>{label}</span>;
+    }
+
+    function PipelineBar({ contact }) {
+      const steps = PIPELINE.map(s => ({ ...s, done: s.isDate ? !!contact[s.key] : !!contact[s.key] }));
+      const done = steps.filter(s=>s.done).length;
+      return (
+        <div>
+          <div className="flex justify-between mb-1">
+            <span className="text-xs font-medium text-gray-400">Pipeline</span>
+            <span className="text-xs text-gray-300">{done}/{steps.length}</span>
+          </div>
+          <div className="flex gap-0.5 mb-1">
+            {steps.map(s => <div key={s.key} className={`flex-1 h-1.5 rounded-full ${s.done?'bg-indigo-500':'bg-gray-100'}`} title={s.label} />)}
+          </div>
+          <div className="flex gap-0.5">
+            {steps.map(s => (
+              <div key={s.key} className="flex-1 text-center">
+                <span className={`text-[9px] leading-none ${s.done?'text-indigo-500 font-semibold':'text-gray-300'}`}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function ContactCard({ contact, onEdit, onDelete, onEnrich, enriching }) {
+      const [menu, setMenu] = useState(false);
+      const menuRef = useRef();
+      useEffect(() => {
+        const close = e => { if(menuRef.current&&!menuRef.current.contains(e.target)) setMenu(false); };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+      }, []);
+
+      const isEmail = (contact.email_or_phone||'').includes('@');
+      const rev = parseFloat(contact.revenue)||0;
+      const domain = (() => { try { return new URL(contact.website.startsWith('http')?contact.website:'https://'+contact.website).hostname; } catch { return contact.website; } })();
+
+      return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all overflow-hidden flex flex-col">
+          {/* Top */}
+          <div className="p-4 pb-3">
+            <div className="flex items-start gap-3">
+              <Avatar contact={contact} />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-gray-900 text-base leading-tight truncate">{contact.name||'Unnamed'}</h3>
+                {contact.linkedin_headline && <p className="text-sm text-gray-500 mt-0.5 lc1">{contact.linkedin_headline}</p>}
+                {(contact.linkedin_company||contact.industry) && (
+                  <p className="text-xs text-gray-400 mt-0.5 lc1">{[contact.linkedin_company,contact.industry].filter(Boolean).join(' · ')}</p>
+                )}
+                {contact.linkedin_location && <p className="text-xs text-gray-400 mt-0.5">📍 {contact.linkedin_location}</p>}
+              </div>
+              <div className="relative flex-shrink-0" ref={menuRef}>
+                <button onClick={()=>setMenu(!menu)} className="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-300 hover:text-gray-500 text-xl leading-none font-bold transition">⋯</button>
+                {menu && (
+                  <div className="absolute right-0 top-8 w-36 bg-white border border-gray-100 rounded-xl shadow-xl z-20 py-1 text-sm">
+                    <button onClick={()=>{onEdit(contact);setMenu(false)}} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 text-gray-700">✏️ Edit</button>
+                    <button onClick={()=>{onEnrich(contact);setMenu(false)}} disabled={enriching} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-indigo-600 disabled:opacity-50">
+                      {enriching ? '⏳ Enriching...' : '✨ Enrich'}
+                    </button>
+                    <hr className="my-1 border-gray-100"/>
+                    <button onClick={()=>{onDelete(contact.id);setMenu(false)}} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-red-50 text-red-500">🗑 Delete</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Links */}
+            <div className="flex flex-wrap gap-3 mt-3 text-xs">
+              {contact.linkedin_url && (
+                <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline">
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-8 13H7v-7h4v7zm-2-8.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm10 8.5h-4v-3.5c0-1-.4-1.5-1.1-1.5-.8 0-1.4.6-1.4 1.5V16h-4V9h4v1.1c.5-.8 1.4-1.4 2.5-1.4 2 0 4 1.3 4 4.1V16z"/></svg>
+                  LinkedIn
+                </a>
+              )}
+              {contact.website && (
+                <a href={contact.website.startsWith('http')?contact.website:'https://'+contact.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-gray-500 hover:underline">
+                  🌐 {contact.website_title || domain}
+                </a>
+              )}
+              {contact.email_or_phone && (
+                <span className="flex items-center gap-1 text-gray-400">{isEmail?'✉️':'📞'} {contact.email_or_phone}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Pipeline */}
+          <div className="px-4 py-3 border-t border-gray-50">
+            <PipelineBar contact={contact} />
+          </div>
+
+          {/* Notes */}
+          {contact.notes && (
+            <div className="px-4 py-2.5 border-t border-gray-50">
+              <p className="text-xs text-gray-400 lc2 italic">"{contact.notes}"</p>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="px-4 py-2.5 border-t border-gray-50 mt-auto flex items-center justify-between flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {contact.source && <Badge label={contact.source} colorClass={SOURCE_COLOR[contact.source]||'bg-gray-100 text-gray-600'} />}
+              {contact.type   && <Badge label={contact.type}   colorClass={TYPE_COLOR[contact.type]||'bg-gray-100 text-gray-600'} />}
+              {contact.enriched_at && <span className="text-xs text-gray-200">✓ {fmtDate(contact.enriched_at)}</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              {rev>0 && <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{fmtCurrency(rev)}</span>}
+              {enriching && <span className="text-xs text-indigo-400 spin">⟳</span>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─── CONTACT MODAL ──────────────────────────────── */
+    function Field({label, children}) {
+      return <div className="flex flex-col gap-1"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{label}</label>{children}</div>;
+    }
+    const inp = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white";
+    const sel = inp + " appearance-none";
+
+    function Toggle({ checked, onChange, label }) {
+      return (
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <div onClick={()=>onChange(!checked)} className={`w-9 h-5 rounded-full relative transition-colors ${checked?'bg-indigo-500':'bg-gray-200'}`}>
+            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${checked?'translate-x-4':'translate-x-0.5'}`}/>
+          </div>
+          <span className="text-sm text-gray-700">{label}</span>
+        </label>
+      );
+    }
+
+    function ContactModal({ contact, onSave, onClose }) {
+      const [f, setF] = useState({ ...DEFAULTS, ...(contact||{}) });
+      const set = k => v => setF(p=>({...p,[k]:v}));
+      const setBool = k => v => setF(p=>({...p,[k]:!!v}));
+
+      const submit = e => {
+        e.preventDefault();
+        if (!f.name.trim()) { alert('Name is required'); return; }
+        onSave(f);
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-bg">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-500 flex-shrink-0">
+              <h2 className="text-white font-bold text-lg">{contact ? 'Edit Contact' : 'New Contact'}</h2>
+              <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
+            </div>
+
+            <form onSubmit={submit} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Basic Info */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Basic Info</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Full Name *"><input className={inp} value={f.name} onChange={e=>set('name')(e.target.value)} placeholder="First Last" /></Field>
+                  <Field label="Industry"><input className={inp} value={f.industry} onChange={e=>set('industry')(e.target.value)} placeholder="SaaS, E-commerce..." /></Field>
+                  <Field label="Source">
+                    <select className={sel} value={f.source} onChange={e=>set('source')(e.target.value)}>
+                      <option value="">— None —</option>
+                      {SOURCES.map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Type">
+                    <select className={sel} value={f.type} onChange={e=>set('type')(e.target.value)}>
+                      <option value="">— None —</option>
+                      {TYPES.map(t=><option key={t}>{t}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              </div>
+
+              {/* Contact Details */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Contact Details</h3>
+                <div className="space-y-3">
+                  <Field label="LinkedIn Profile URL"><input className={inp} value={f.linkedin_url} onChange={e=>set('linkedin_url')(e.target.value)} placeholder="https://linkedin.com/in/..." /></Field>
+                  <Field label="Website"><input className={inp} value={f.website} onChange={e=>set('website')(e.target.value)} placeholder="https://example.com" /></Field>
+                  <Field label="Email or Phone"><input className={inp} value={f.email_or_phone} onChange={e=>set('email_or_phone')(e.target.value)} placeholder="email@example.com or +1 555 000 0000" /></Field>
+                </div>
+              </div>
+
+              {/* Pipeline */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Pipeline</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="First Contact Date"><input type="date" className={inp} value={f.first_contact_date} onChange={e=>set('first_contact_date')(e.target.value)} /></Field>
+                  <div className="flex items-end pb-1"><Toggle checked={!!f.bump1} onChange={setBool('bump1')} label="1 Gentle Bump" /></div>
+                  <Toggle checked={!!f.bump2} onChange={setBool('bump2')} label="2 Value Nudge" />
+                  <Toggle checked={!!f.bump3} onChange={setBool('bump3')} label="4–5 Last Shot" />
+                  <Toggle checked={!!f.response} onChange={setBool('response')} label="Response received" />
+                  <Toggle checked={!!f.loom_sent} onChange={setBool('loom_sent')} label="Loom sent" />
+                  <Toggle checked={!!f.sales_call} onChange={setBool('sales_call')} label="Sales call done" />
+                </div>
+              </div>
+
+              {/* Notes & Revenue */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Notes & Revenue</h3>
+                <div className="space-y-3">
+                  <Field label="Notes / Message Sent"><textarea className={inp+" resize-none"} rows={3} value={f.notes} onChange={e=>set('notes')(e.target.value)} placeholder="What did you send? Any context..." /></Field>
+                  <Field label="Their Answer"><textarea className={inp+" resize-none"} rows={2} value={f.answer} onChange={e=>set('answer')(e.target.value)} placeholder="What did they say?" /></Field>
+                  <Field label="Revenue ($)"><input type="number" className={inp} value={f.revenue} onChange={e=>set('revenue')(e.target.value)} placeholder="0" min="0" step="any" /></Field>
+                </div>
+              </div>
+            </form>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 flex-shrink-0">
+              <button type="button" onClick={onClose} className="px-5 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+              <button onClick={submit} className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">{contact ? 'Save Changes' : 'Add Contact'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─── SETTINGS MODAL ─────────────────────────────── */
+    function SettingsModal({ onClose }) {
+      const [key, setKey] = useState(S.getSetting('proxycurl_key'));
+      const save = () => { S.setSetting('proxycurl_key', key.trim()); onClose(); };
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-bg">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-500">
+              <h2 className="text-white font-bold text-lg">⚙ Settings</h2>
+              <button onClick={onClose} className="text-white/70 hover:text-white text-xl">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Proxycurl API Key</label>
+                <p className="text-xs text-gray-400 mt-1 mb-2">Used to auto-fill LinkedIn profile photo, headline & company. Get a free key (10 credits) at <strong>nubela.co/proxycurl</strong></p>
+                <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono" value={key} onChange={e=>setKey(e.target.value)} placeholder="pk_..." />
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-700">
+                <strong>Your data is stored locally</strong> in your browser (localStorage). It never leaves your computer. To back up, use Export CSV.
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+              <button onClick={onClose} className="px-5 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={save} className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Save</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─── STATS BAR ──────────────────────────────────── */
+    function StatsBar({ contacts }) {
+      const total = contacts.length;
+      const responded = contacts.filter(c=>c.response).length;
+      const loom = contacts.filter(c=>c.loom_sent).length;
+      const calls = contacts.filter(c=>c.sales_call).length;
+      const revenue = contacts.reduce((s,c)=>s+(parseFloat(c.revenue)||0),0);
+      const tiles = [
+        { label:'Total', value:total, color:'text-indigo-600' },
+        { label:'Responded', value:responded, color:'text-emerald-600' },
+        { label:'Loom Sent', value:loom, color:'text-amber-600' },
+        { label:'Sales Calls', value:calls, color:'text-blue-600' },
+        { label:'Revenue', value:fmtCurrency(revenue)||'$0', color:'text-violet-600' },
+      ];
+      return (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="grid grid-cols-5 gap-3">
+            {tiles.map(t=>(
+              <div key={t.label} className="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-3 text-center">
+                <div className={`text-2xl font-bold ${t.color}`}>{t.value}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{t.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ─── MAIN APP ───────────────────────────────────── */
+    function App() {
+      const [contacts, setContacts] = useState(() => S.all());
+      const [search, setSearch] = useState('');
+      const [filterSource, setFilterSource] = useState('');
+      const [filterType, setFilterType] = useState('');
+      const [modal, setModal] = useState(null);   // null | 'add' | contact obj
+      const [settings, setSettings] = useState(false);
+      const [enriching, setEnriching] = useState(null);
+      const [toast, setToast] = useState('');
+      const importRef = useRef();
+
+      const refresh = () => setContacts(S.all());
+      const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3500); };
+
+      const filtered = contacts.filter(c => {
+        if (search && !`${c.name} ${c.email_or_phone} ${c.industry} ${c.linkedin_headline} ${c.linkedin_company}`.toLowerCase().includes(search.toLowerCase())) return false;
+        if (filterSource && c.source !== filterSource) return false;
+        if (filterType  && c.type   !== filterType)   return false;
+        return true;
+      });
+
+      const handleSave = contact => {
+        if (contact.id) S.upd(contact.id, contact);
+        else S.add(contact);
+        refresh();
+        setModal(null);
+      };
+
+      const handleDelete = id => {
+        if (!confirm('Delete this contact?')) return;
+        S.del(id);
+        refresh();
+      };
+
+      const handleEnrich = async contact => {
+        setEnriching(contact.id);
+        const msgs = [];
+        try {
+          const li = await enrichLinkedIn(contact);
+          S.upd(contact.id, li);
+          msgs.push('✓ LinkedIn enriched');
+        } catch(e) { msgs.push('LinkedIn: '+e.message); }
+        try {
+          const ws = await enrichWebsite(contact);
+          S.upd(contact.id, ws);
+          msgs.push('✓ Website enriched');
+        } catch(e) { msgs.push('Website: '+e.message); }
+        refresh();
+        setEnriching(null);
+        showToast(msgs.join('  |  '));
+      };
+
+      const handleImport = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const rows = parseCSV(ev.target.result);
+          let imported = 0;
+          rows.forEach(row => {
+            const c = csvRowToContact(row);
+            if (c.name.trim()) { S.add(c); imported++; }
+          });
+          refresh();
+          showToast(`Imported ${imported} contacts`);
+          e.target.value = '';
+        };
+        reader.readAsText(file);
+      };
+
+      return (
+        <div className="min-h-screen">
+          {/* Header */}
+          <header className="bg-gradient-to-r from-indigo-700 to-indigo-500 shadow-md">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-8 13H7v-7h4v7zm-2-8.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm10 8.5h-4v-3.5c0-1-.4-1.5-1.1-1.5-.8 0-1.4.6-1.4 1.5V16h-4V9h4v1.1c.5-.8 1.4-1.4 2.5-1.4 2 0 4 1.3 4 4.1V16z"/></svg>
+                </div>
+                <div>
+                  <h1 className="text-white font-bold text-xl leading-tight">CRM LinkedIn</h1>
+                  <p className="text-indigo-200 text-xs">{contacts.length} contacts · data stored locally</p>
+                </div>
+              </div>
+              <button onClick={()=>setSettings(true)} className="text-white/70 hover:text-white text-xl transition" title="Settings">⚙</button>
+            </div>
+          </header>
+
+          {/* Stats */}
+          <StatsBar contacts={contacts} />
+
+          {/* Toolbar */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="relative flex-1 min-w-[180px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+                <input type="text" placeholder="Search contacts..." value={search} onChange={e=>setSearch(e.target.value)}
+                  className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+
+              <select value={filterSource} onChange={e=>setFilterSource(e.target.value)} className="border border-gray-200 rounded-lg text-sm py-2 px-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="">All Sources</option>
+                {SOURCES.map(s=><option key={s}>{s}</option>)}
+              </select>
+              <select value={filterType} onChange={e=>setFilterType(e.target.value)} className="border border-gray-200 rounded-lg text-sm py-2 px-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <option value="">All Types</option>
+                {TYPES.map(t=><option key={t}>{t}</option>)}
+              </select>
+
+              <label className="cursor-pointer flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                📥 Import CSV
+                <input ref={importRef} type="file" accept=".csv" onChange={handleImport} className="hidden" />
+              </label>
+
+              <button onClick={()=>exportCSV(contacts)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+                📤 Export CSV
+              </button>
+
+              <button onClick={()=>setModal('add')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 transition ml-auto">
+                + Add Contact
+              </button>
+            </div>
+          </div>
+
+          {/* Cards */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-12">
+            {filtered.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="text-5xl mb-4">{contacts.length===0?'📋':'🔍'}</div>
+                <p className="text-gray-400 text-lg font-medium">{contacts.length===0?'No contacts yet':'No contacts match your search'}</p>
+                {contacts.length===0 && (
+                  <button onClick={()=>setModal('add')} className="mt-6 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 transition">+ Add First Contact</button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {filtered.map(c=>(
+                  <ContactCard key={c.id} contact={c}
+                    onEdit={c=>setModal(c)}
+                    onDelete={handleDelete}
+                    onEnrich={handleEnrich}
+                    enriching={enriching===c.id}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Toast */}
+          {toast && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-full shadow-xl z-50 max-w-lg text-center">
+              {toast}
+            </div>
+          )}
+
+          {/* Modals */}
+          {modal && (
+            <ContactModal
+              contact={modal==='add' ? null : modal}
+              onSave={handleSave}
+              onClose={()=>setModal(null)}
+            />
+          )}
+          {settings && <SettingsModal onClose={()=>setSettings(false)} />}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
