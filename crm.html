@@ -62,7 +62,7 @@
       if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.description || `Proxycurl error ${res.status}`); }
       const p = await res.json();
       const exp = (p.experiences||[]).find(e=>!e.ends_at)||(p.experiences||[])[0];
-      return { linkedin_photo: p.profile_pic_url||'', linkedin_headline: p.headline||'', linkedin_company: exp?.company||'', linkedin_location: [p.city,p.country_full_name].filter(Boolean).join(', '), enriched_at: new Date().toISOString() };
+      return { linkedin_photo: p.profile_pic_url||'', linkedin_headline: p.headline||'', linkedin_company: exp?.company||'', linkedin_location: [p.city,p.country_full_name].filter(Boolean).join(', '), enriched_at: new Date().toISOString(), _full_name: p.full_name || [p.first_name,p.last_name].filter(Boolean).join(' ') || '' };
     }
 
     async function enrichWebsite(contact) {
@@ -428,6 +428,8 @@
       const [settings, setSettings] = useState(false);
       const [enriching, setEnriching] = useState(null);
       const [toast, setToast] = useState('');
+      const [quickAddUrl, setQuickAddUrl] = useState('');
+      const [quickAdding, setQuickAdding] = useState(false);
       const importRef = useRef();
 
       const refresh = () => setContacts(S.all());
@@ -471,6 +473,35 @@
         showToast(msgs.join('  |  '));
       };
 
+      const handleQuickAdd = async () => {
+        const url = quickAddUrl.trim();
+        if (!url.match(/linkedin\.com\/in\//i)) { showToast('Please paste a valid LinkedIn profile URL (e.g. linkedin.com/in/username)'); return; }
+        let normalizedUrl = url;
+        if (!normalizedUrl.startsWith('http')) normalizedUrl = 'https://' + normalizedUrl;
+        const cleanUrl = normalizedUrl.replace(/\?.*$/, '').replace(/\/+$/, '');
+        const existing = S.all().find(c => c.linkedin_url && c.linkedin_url.replace(/\?.*$/, '').replace(/\/+$/, '') === cleanUrl);
+        if (existing) { showToast(`Contact "${existing.name}" already has this LinkedIn URL`); return; }
+        const key = S.getSetting('proxycurl_key');
+        if (!key) { showToast('No Proxycurl API key. Click ⚙ Settings to add one.'); return; }
+        setQuickAdding(true);
+        setQuickAddUrl('');
+        const slug = normalizedUrl.match(/\/in\/([^/?]+)/)?.[1]?.replace(/-/g, ' ') || '';
+        const fallbackName = slug.replace(/\b\w/g, c => c.toUpperCase()) || 'Unknown';
+        const newContact = S.add({ linkedin_url: normalizedUrl, source: 'LinkedIn', name: fallbackName });
+        refresh();
+        try {
+          const li = await enrichLinkedIn(newContact);
+          const name = li._full_name || fallbackName;
+          delete li._full_name;
+          S.upd(newContact.id, { ...li, name });
+          showToast('✓ Contact created from LinkedIn');
+        } catch(e) {
+          showToast('Contact created but enrichment failed: ' + e.message);
+        }
+        refresh();
+        setQuickAdding(false);
+      };
+
       const handleImport = e => {
         const file = e.target.files[0];
         if (!file) return;
@@ -509,6 +540,21 @@
 
           {/* Stats */}
           <StatsBar contacts={contacts} />
+
+          {/* Quick Add from LinkedIn */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-8 13H7v-7h4v7zm-2-8.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm10 8.5h-4v-3.5c0-1-.4-1.5-1.1-1.5-.8 0-1.4.6-1.4 1.5V16h-4V9h4v1.1c.5-.8 1.4-1.4 2.5-1.4 2 0 4 1.3 4 4.1V16z"/></svg>
+                <input type="text" placeholder="Paste LinkedIn profile URL to create a contact..." value={quickAddUrl} onChange={e=>setQuickAddUrl(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!quickAdding&&quickAddUrl.trim()&&handleQuickAdd()} disabled={quickAdding}
+                  className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50" />
+              </div>
+              <button onClick={handleQuickAdd} disabled={quickAdding||!quickAddUrl.trim()}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                {quickAdding ? (<><span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full spin"></span> Adding...</>) : '+ Quick Add'}
+              </button>
+            </div>
+          </div>
 
           {/* Toolbar */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
