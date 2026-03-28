@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Importing contacts...</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-indigo-50 flex items-center justify-center min-h-screen font-sans">
+  <div class="text-center bg-white rounded-2xl shadow-lg p-10 max-w-sm w-full">
+    <div id="icon" class="text-5xl mb-4">⏳</div>
+    <h1 class="text-xl font-bold text-gray-800 mb-2" id="title">Importing contacts...</h1>
+    <p class="text-gray-500 text-sm" id="msg">Please wait</p>
+    <div id="bar" class="mt-5 h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div id="progress" class="h-full bg-indigo-500 rounded-full transition-all" style="width:0%"></div>
+    </div>
+    <a id="btn" href="crm.html" class="hidden mt-6 inline-block px-6 py-2.5 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition">Open CRM →</a>
+  </div>
+
+  <script>
+  const CSV = `,Source,Type,First & Last Name,Industry,Social Profile (link),Website,Email or Phone,First Contact Date,1 Gentle bump,2 Value nudge,4-5 Last shot for now,Response (Y/N),Loom Sent (Y/N),Sales Call,Notes or message sent,Answer,Revenue
+,Phone Number,Leak,Luis A. RC,No-Code Software development,-,,-,07/01/26,,,,TRUE,FALSE,FALSE,,Not for now. Not enough bandwith.,0
+,Whatsapp,Leak,Aitor Arteta,Services for Architecture,https://www.linkedin.com/in/arteta/,,+34 667 66 14 83,05/01/26,,,,TRUE,FALSE,FALSE,Notion sent. Pending phone call,,
+,Email,Leak,Roberto Aguilar,Saas/Architecture,https://www.linkedin.com/in/roberto-aguilar-445303161/,,ra@yooparchitects.co.uk,07/01/26,,,,TRUE,FALSE,FALSE,,,
+,LinkedIn,Leak,Gordon Evans,Saas/Architecture,https://www.linkedin.com/in/gordonevans/,,ge@yooparchitects.co.uk,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Michael Lewarne,Services for Architecture,https://www.linkedin.com/in/michaellewarne/,,-,05/01/26,,,,TRUE,FALSE,FALSE,"Linkedin: Hey Michael, hope 2026 turns as another wonderful year for the back-to-uni Michael! I'm reaching out because I'm starting to ghostwrite for Architecture offices, focused on creating short Educational Email Courses (EEC) to help capture more emails.","Hi Gabriel, EEC sounds like a great idea, and a valuable service. I'll definitely keep you in mind if I hear of anyone that would benefit from your services. Wishing you all the best with it. Cheers Michael",
+,LinkedIn,Faucet,Daplaah-Teng Aryene,Architecture,https://www.linkedin.com/in/daplaah-teng-aryene/,,,05/01/26,,,,TRUE,FALSE,FALSE,"Linkedin: Hey Daplaah, long time no speak. Hope 2026 goes great for you! I went through your BoA podcast some weeks ago. I'm reaching out because I'm starting to ghostwrite for Architecture offices, focused on creating short Educational Email Courses (EEC).",,
+,Whatsapp,Leak,Carlos Peraita,Architecture,https://www.linkedin.com/in/carlos-peraita-08ab88173/,,+34 666 10 11 90,08/01/26,,,,TRUE,TRUE,FALSE,,"tio voy a ser honesto contigo desde todo el respeto y carino pero esque no me interesa para nada tener este tipo de contenido",
+,Whatsapp,Leak,Horacio Leon,Education/Consulting,https://www.linkedin.com/in/horacioleoncastillo/,,+34 639 16 77 23,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Leak,Ray Brown,Services for Architecture,https://www.linkedin.com/in/raybrownceomentor/,,-,06/01/26,,,,TRUE,FALSE,FALSE,from Archbiz,,
+,LinkedIn,Leak,Tim Smith,Services for Architecture,https://www.linkedin.com/in/timsmithmbb/,,-,,,,,FALSE,FALSE,FALSE,from Archbiz. Also Ludlow Street as solo Consultant (can be faucet if free client),,
+,Whatsapp,Faucet,Antonio Gonzalez Viegas,Services for Architecture,https://www.linkedin.com/in/that-open-guy/,,,8/1/26,,,,TRUE,TRUE,FALSE,Directs me to Jesus Valderrama,,
+,Instagram,Faucet,Enrique Giron,Architecture,,,,15/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Tyler Suomala,Services for Architecture,https://www.linkedin.com/in/tylersuomala/,,,15/1/26,16/2/26,,,TRUE,TRUE,FALSE,"Hey Tyler! Hope everything's ok. I'm reaching out because I'm going deep into ghostwriting for Architects. I'm focusing on creating short Educational Email Courses to help them capture emails for their firms.",,
+,LinkedIn,Faucet,Dave Sharp,Services for Architecture,https://www.linkedin.com/in/dave-sharp-62262235/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Ayo Abbas,Services for Architecture,https://www.linkedin.com/in/ayoabbas/,,,15/1/26,,,,FALSE,FALSE,FALSE,"Hey Ayo! I realized we've actually never talked, but I feel like I know you already just from hearing you on so many podcasts. I'm reaching out because I'm going deep into ghostwriting for Architects.",,
+,LinkedIn,Faucet,Kristian Mitchell RIBA MRIAI,Architecture,https://www.linkedin.com/in/kristian-mitchell-riba-mriai-24681054/,kristianmitchellarchitects.com,,15/1/26,16/2/26,,,TRUE,FALSE,FALSE,Waiting for new website,,
+,LinkedIn,Faucet,Stephen Drew,Services for Architecture,https://www.linkedin.com/in/stephen-drew/,,,15/1/26,,,,FALSE,FALSE,FALSE,Deleted me as a contact on Linkedin,,
+,LinkedIn,Faucet,Sara Kolata,Services for Architecture,https://www.linkedin.com/in/sarakolata/,,,15/1/26,,,,FALSE,FALSE,FALSE,Offered EEC as opt-in for Disrupt Mag. They have a weak newsletter opt-in,,
+,LinkedIn,Cold,Shawn Adams,Architecture,https://www.linkedin.com/in/shawn-adams-architect/,,,27/01/26,16/2/26,,,FALSE,FALSE,FALSE,"Hey Shawn, I just saw that HTA has a huge following between Linkedin and Instagram. I checked and you average 9.000 visits a month to the site, but couldn't find any kind of opt-in to a newsletter.",,
+,LinkedIn,Faucet,Chris Simmons,Services for Architecture,https://www.linkedin.com/in/chrissimmons0/,,,15/1/26,,,,FALSE,FALSE,FALSE,Architects Instruction: Discontinued?,,
+,LinkedIn,Faucet,Maja Kovacic-Kalra,Services for Architecture,https://www.linkedin.com/in/majakovacickalra/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Jon Clayton,Services for Architecture,https://www.linkedin.com/in/mrjonclayton/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Aylin Round,Services for Architecture,https://www.linkedin.com/in/aylin-round/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Ana Zabarsky,Services for Architecture,https://www.linkedin.com/in/ana-zabarsky-748186b8/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Faucet,Evelyn Lee,Services for Architecture,https://www.linkedin.com/in/evelynlee/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Christina Seilern,Architecture,https://www.linkedin.com/in/christina-seilern-82735b13/,,cseilern@studioseilern.com,19/1/26,14/2/26,,,TRUE,FALSE,FALSE,"Sorry to bother you again, I was just on your website and just saw the feature on 198 Castellana. I did value that building back when I was an analyst in consulting - glad to see it moving forward.",,
+,Email,Cold,N Mikari,Architecture,-,,nmikari@studioseilern.com,20/1/26,27/1/26,23/2/26,,FALSE,FALSE,FALSE,from Christina Seilern. Email sent,,
+,LinkedIn,Cold,Rion Willard,Services for Architecture,https://uk.linkedin.com/in/rion-willard-584a882a,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Mel McGerr FCIAT MRIAI,Architecture,https://www.linkedin.com/in/mel-mcgerr-architect/,,mel.mcgerr@mmarchitecture.ie,29/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Mel, first of all, thanks for accepting my invitation to connect! I saw that your firm website is under construction, so I think timing can be good for my proposal.",,
+,LinkedIn,Cold,Xristina Argyros,Architecture,https://www.linkedin.com/in/xristina-argyros-a346b857,,x@neiheiserargyros.com,29/1/26,14/2/26,23/2/26,,FALSE,FALSE,FALSE,"Hey Xristina! I'm getting into ghostwriting for Architecture leaders and just saw that you have no email marketing strategy in the N+A website.",,
+,LinkedIn,Cold,Edwin CHAN,Architecture,https://www.linkedin.com/in/edwin-chan-a9a25ba/,,ec@edwinchan.us,20/1/26,14/2/26,,,TRUE,FALSE,FALSE,"Hey Edwin, I loved the construction systems and materials in the True North project.",,
+,LinkedIn,Cold,Robert Yuen,Services for Architecture,https://www.linkedin.com/in/yuenrobert/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Robert Drury,Architecture,https://www.linkedin.com/in/robertmdrury/,,rob@druryarchitects.com,20/1/26,23/2/26,,,TRUE,TRUE,FALSE,"Hey Robert, I saw you have a big following on Linkedin and such an elegant and appealing website. How come you have no newsletter in sight?",,
+,LinkedIn,Cold,Ian Laurence,Architecture,https://www.linkedin.com/in/ian-laurence-riba/,,ianjlaurence@gmail.com,27/1/26,14/2/26,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Fariba Khalvati Beighlie NCARB LEED AP,Architecture,https://www.linkedin.com/in/faribakhalvatibeighlie/,,faribakbaia@gmail.com,27/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Fariba, first of all, I love your angle on offering Neuro Architecture (a couple steps ahead every other firm). Are you in charge of PR & comms at the office?",,
+,LinkedIn,Cold,Victor Acuna,Architecture,https://www.linkedin.com/in/acu%C3%B1a/,,,27/1/26,14/2/26,,,FALSE,FALSE,FALSE,Feb 23 subscribed to newsletter.,,
+,LinkedIn,Cold,Graham Irwin,Architecture,https://www.linkedin.com/in/graham-irwin/,,graham@essentialhabitat.com,27/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Graham, just checked that you're wildly focused on passive and efficient homes. I love your take on them being for the future.",,
+,LinkedIn,Cold,Neha Sivaprasad,Services for Architecture,https://www.linkedin.com/in/neha-sivaprasad/,,,22/01/26,23/2/26,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Mauricio Espinosa,Architecture,https://www.linkedin.com/in/espinosam,burgeoningstudio.com,mde@burgeoningstudio.com,22/1/26,,,,TRUE,TRUE,FALSE,"That was a quick and open response, thanks for that as well! I picture a 5-7 day sequence where the prospect gets some valuable info while you build your authority in front of them.",,
+,LinkedIn,Cold,Ilaria Mazzoleni,Architecture,https://www.linkedin.com/in/ilaria-mazzoleni/,,,29/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Ilaria, thanks for accepting my invite!! I'm getting into ghostwriting for Architecture leaders and am designing a service to provide email marketing strategy to architecture offices.",,
+,LinkedIn,Cold,Shahrzad Razi Registered Architect,Architecture,https://www.linkedin.com/in/shahrzad-razi/,,,29/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Shahrzad! I checked your website and saw that you have a newsletter opt-in but with no lead magnet strategy.",,
+,LinkedIn,Cold,Lindsey Engels,Architecture,https://www.linkedin.com/in/lindseyengels/,,lindsey@arclogica.com,5/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Lindsey! I love the social side of what you do in Arclogica. I was poking around Arclogica website and I had trouble finding your email list.",,
+,LinkedIn,Cold,Vaishnavi More,Services for Architecture,https://www.linkedin.com/in/vaishnavi-more-5678b8137/,,,29/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Josiah Maddock - Architect,Architecture,https://www.linkedin.com/in/josiahmaddock/,,josiah@josiahmaddock.com,5/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey Josiah! Love your architecture style, you sure have been to places to bring your architecture (mate, Honolulu must be a dream to design and build)",,
+,LinkedIn,Cold,David Fletcher,Architecture,https://www.linkedin.com/in/david-fletcher-4a1b2aa/,,dfletcher@fletcherstudio.com,5/1/26,14/2/26,,,FALSE,FALSE,FALSE,"Hey David! Love what you're doing in Fletcher Studio. I subscribed to your email list 6 days ago and didn't get even a welcome email after confirming.",,
+,LinkedIn,Cold,Lilian Asperin,Architecture,https://www.linkedin.com/in/lilian-asperin-405ab5/,https://wrnsstudio.com/,lilianasperin@gmail.com,,,,,FALSE,FALSE,FALSE,"(Marketing partner is Wesley Wong) Hey Lilian, I was browsing through WRNS website and found you have nowhere to join your newsletter.",,
+,LinkedIn,Cold,Jeremy Sicklick,Proptech,https://www.linkedin.com/in/jeremy-sicklick-216a861/,,,,,,,FALSE,FALSE,FALSE,Saas for Real Estate valuations,,
+,LinkedIn,Cold,Vani Bahl,Architecture,https://www.linkedin.com/in/vanibahl/,,,5/1/26,,,,FALSE,FALSE,FALSE,"Hey Vani! I love your approach with Bhooma. I was browsing around your website and realized your email opt-in box doesn't work!",,
+,LinkedIn,Cold,Xavier Salas NCARB-AIA,Architecture,https://www.linkedin.com/in/xavier-salas/,,,5/1/26,,,,FALSE,FALSE,FALSE,"Hey Xavier, first of all thanks for accepting my invite to connect. I was browsing through the PX Architecture website and realised you have no email list, no newsletter strategy.",,
+,LinkedIn,Cold,Stephen Phillips FAIA PhD,Architecture,https://www.linkedin.com/in/sparchs/,,,8/1/26,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Dan Levin,Architecture,,https://22reoffice.com/,info@22reoffice.com,,,,,FALSE,FALSE,FALSE,Linkedin link to website is broken. Dan Levin has no profile standing to his name and role,,
+,LinkedIn,Cold,Nicholas Polley,Services for Architecture,https://www.linkedin.com/in/nicholaspolley,https://3ddesignbureau.com/,nick@3ddesignbureau.com,16/1/26,,,,FALSE,FALSE,FALSE,"Weak Opt-in. ""subscribe to our newsletter""",,
+,LinkedIn,Cold,David Maddox,Architecture,https://www.linkedin.com/in/david-maddox-69a6298,,david@maddoxplanning.com,16/1/26,,,,FALSE,FALSE,FALSE,To follow up (They're planners),,
+,LinkedIn,Cold,Wan Wan-Sheong Yau,Architecture,https://www.linkedin.com/in/wansheongyau1,https://studiomoren.co.uk/contact,wany@studiomoren.co.uk,16/1/26,,,,FALSE,FALSE,FALSE,No opt in. No email strategy,,
+,LinkedIn,Cold,Kitae Kim,Services for Architecture,https://www.linkedin.com/in/kitaedesigns,https://foveate.com/waitlist/,kitae@foveate.com,16/1/26,23/2/26,,,TRUE,TRUE,FALSE,Weak Opt-in for Waitlist,,
+,LinkedIn,Leak,Honore van Rijswijk,Architecture,https://www.linkedin.com/in/honorevanrijswijk,https://www.collective.co.nl/,hvr@collective.co.nl,25/4/25,16/1/26,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Mehron Kirk,Architecture,https://www.linkedin.com/in/mehron-kirk-a300423a,,mkirk@studiodwg.com,16/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Daniel Woodroffe,Architecture,https://www.linkedin.com/in/danielwoodroffe,https://www.studiodwg.com/team/daniel-woodroffe,dwoodroffe@studiodwg.com,16/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Manuel Nogueira,Architecture,https://www.linkedin.com/in/manuel-nogueira-29103612/,https://www.andarchitectsbespoke.co.uk/,manuel@andarchitects.co.uk,18/1/26,18/1/26,,,FALSE,FALSE,FALSE,Angle: build trust and educate private clients,,
+,LinkedIn,Cold,Niall Durney,Architecture,https://www.linkedin.com/in/niall-durney,http://www.faulknerbrowns.com/,,,23/2/26,,,FALSE,FALSE,FALSE,"Quick win: add studio link to Contact Info for all the team. Feb 18 subscribed to newsletter. Comms lead is James Uden",,
+,LinkedIn,Cold,Henry Squire,Architecture,https://www.linkedin.com/in/henry-squire-390481a,https://squireandpartners.com/,,18/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Ankita Dwivedi,Services for Architecture,https://www.linkedin.com/in/profile-ankitadwivedi/,https://www.firstplanit.com/,,,,,,FALSE,FALSE,FALSE,Weak opt-in. Big resources to make a 5-day EEC and provide value without them joining,,
+,LinkedIn,Cold,Hakan Agca,Architecture,https://www.linkedin.com/in/hakanagca/,https://cross-works.com/,,,,,,FALSE,FALSE,FALSE,Very large scale. Show added value and transdisciplinary collaboration. EEC to decision makers,,
+,LinkedIn,Cold,Pippa Goldfinger,Architecture,https://www.linkedin.com/in/pippagoldfinger,,,18/1/26,,,,FALSE,FALSE,FALSE,No es partner pero algo manda,,
+,LinkedIn,Cold,Earle Arney,Architecture,https://www.linkedin.com/in/earlearney,https://www.afkstudios.com/practice/,earle.arney@afkstudios.com,18/1/26,,,,FALSE,FALSE,FALSE,Big man,,
+,LinkedIn,Cold,Jack Pringle,Architecture,https://www.linkedin.com/in/jackpringle,https://www.studiopringle.com/,jackpringle@studiopringle.com,18/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Mark Coffey,Architecture,https://www.linkedin.com/in/mark-coffey-68235b74,https://www.oberlanders.co.uk/insights,m.coffey@oberlanders.co.uk,18/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Katharine Cotter,Architecture,https://www.linkedin.com/in/katharinecotter,https://www.oberlanders.co.uk/insights,k.cotter@oberlanders.co.uk,,,,,FALSE,FALSE,FALSE,"From previous lead, is the one in charge of Mkt",,
+,LinkedIn,Cold,Philip Macdonald,Architecture,https://www.linkedin.com/in/philip-macdonald-53b84989,,pm@oberlanders.co.uk,18/1/26,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jo Bacon,Architecture,https://www.linkedin.com/in/jo-bacon-0721935/,https://www.alliesandmorrison.com/people/joanna-bacon,jbacon@alliesandmorrison.co.uk,,,,,FALSE,FALSE,FALSE,Pointed me to Daniel Elsea.,,
+,LinkedIn,Cold,Miles Leigh,Architecture,https://www.linkedin.com/in/miles-leigh-19481010/,,mleigh@alliesandmorrison.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Daniel Elsea,Architecture,https://www.linkedin.com/in/daniel-elsea-1a544540/,,delsea@alliesandmorrison.com,,,,,FALSE,FALSE,FALSE,Head of comms. Sent by Jo Bacon. Try Inmail,,
+,LinkedIn,Cold,Eoin OLeary,Architecture,https://www.linkedin.com/in/eoin-o-leary-3a553925,https://www.conformarchitects.com/contact,,,,,,FALSE,FALSE,FALSE,Weak optin. Love the boldness of Repoussoir,,
+,LinkedIn,Cold,Alexander de Caires,Architecture,https://www.linkedin.com/in/alexander-de-caires-518577105,,,,,,,FALSE,FALSE,FALSE,Very good angle in Commercial page for an EEC,,
+,LinkedIn,Cold,Liza Fior,Architecture,https://www.linkedin.com/in/liza-fior-bba30026/,http://muf.co.uk/,liza@muf.co.uk,,,,,FALSE,FALSE,FALSE,Site is not linked to her linkedin profile,,
+,LinkedIn,Cold,Simon Doody,Architecture,https://www.linkedin.com/in/simon-d-5b270034/,https://fcbstudios.com/practice/approach,,,,,,FALSE,FALSE,FALSE,Pedazo de approach en Approach,,
+,LinkedIn,Cold,Harry Paticas,Services for Architecture,https://www.linkedin.com/in/harry-paticas-b443275a/,https://www.retrofitaction.org.uk/,harry@retrofitaction.org.uk,,,,,FALSE,FALSE,FALSE,Offer for free,,
+,LinkedIn,Cold,Adam Murray,Architecture,https://www.linkedin.com/in/adam-murray-b5130337,https://www.urbana.world/home-sector,adam@urbana.world,,,,,FALSE,FALSE,FALSE,They can build EEC for private (being for planning or homeowners),,
+,LinkedIn,Cold,Archontia Manolakelli,Services for Architecture,https://www.linkedin.com/in/archontiamanolakelli/,https://www.archpsych.co.uk/resources-for-designers,,,,,,FALSE,FALSE,FALSE,Archpsych has no opt in lead magnet. Has lots of free resources,,
+,LinkedIn,Cold,Dean McCauley-Bove,Architecture,https://www.linkedin.com/in/deanbove,,,,,,,FALSE,FALSE,FALSE,Oneworks has a weak opt in for the newsletter,,
+,LinkedIn,Cold,David Kehm,Architecture,https://www.linkedin.com/in/david-kehm-3592691,fgmarchitects.com,davidkehm@fgmarchitects.com,,,,,FALSE,FALSE,FALSE,14 feb signed up for newsletter,,
+,Email,Cold,Brian Solem,Architecture,https://www.linkedin.com/in/brianjsolem/,fgmarchitects.com,briansolem@fgmarchitects.com,,,,,FALSE,FALSE,FALSE,From fgm architect website,,
+,LinkedIn,Cold,Sarah Castle,Architecture,https://www.linkedin.com/in/sarah-castle-6498bb38/,ifdo.co,sarah.castle@ifdo.co,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Ryan K Rosen,Architecture,https://www.linkedin.com/in/ryan-k-rosen-the-friendly-designer/,https://www.friendly-futures.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Dan Ionescu NCARB AIA,Architecture,https://www.linkedin.com/in/dan-ionescu-ncarb-aia-92360532/,diap.com,diones@diap.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Mark Boretti,Architecture,https://www.linkedin.com/in/mark-boretti-50722434/,https://www.boretti.pl/,mark.boretti@gmail.com,,,,,FALSE,FALSE,FALSE,14 Feb subscribed to newsletter,,
+,LinkedIn,Cold,Margaret Griffin FAIA,Architecture,https://www.linkedin.com/in/margaret-griffin-faia-77a90410/,griffinenrightarchitects.com,mgriffin@griffinenrightarchitects.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Leda Christopher,Architecture,https://www.linkedin.com/in/ledaco/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Andy Robert,Services for Architecture,https://www.linkedin.com/in/andy-robert,https://slantis.com/start,andy@slantis.com,,,,,FALSE,FALSE,FALSE,15 Feb subscribed to newsletter. Offers 3 free tools.,,
+,LinkedIn,Cold,Benji Shin,Saas,https://www.linkedin.com/in/benji-shin-0bb85346,https://www.zenerate.ai/,,,,,,FALSE,FALSE,FALSE,15 Feb subscribed to newsletter. No lead magnet. Wait for news,,
+,LinkedIn,Cold,Ali R Badie,Architecture,https://www.linkedin.com/in/ali-r-badie-a-i-a-10320911,,alibadie@ymail.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,William H Dodge,Art,https://www.linkedin.com/in/williamhdodge,,william@agangofthree.com,,,,,FALSE,FALSE,FALSE,Let's see what I can offer. EEC on different case studies,,
+,LinkedIn,Cold,Andres Gonzalez,Services for Architecture,https://www.linkedin.com/in/andres-gonzalez-2715755/,RhinoFabStudio.com,rhino3dtv@me.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Shawn Gaffney,Construction products,https://www.linkedin.com/in/shawn-gaffney-a296289/,https://www.infiniumwalls.com/,shawn@infiniumwalls.com,,,,,FALSE,FALSE,FALSE,"15 Feb subscribed. Weak opt-in, no lead magnet",,
+,LinkedIn,Cold,Anthony Brower,Architecture,https://www.linkedin.com/in/anthonybrower/,,anthony_brower@theclimatearchitect.com,,,,,FALSE,FALSE,FALSE,Newsletter through a Google Forms,,
+,LinkedIn,Cold,Shane Solomon,Architecture,https://www.linkedin.com/in/shsolomon/,,shane@republicarchitecture.ca,,,,,FALSE,FALSE,FALSE,"Marketing manager below. Looking for your newsletter I found that you STILL have a Fax number on your website.",,
+,Email,Cold,Jennifer Zatser,Architecture,,https://republicarchitecture.ca/people/,j.zatser@republicarchitecture.ca,,,,,FALSE,FALSE,FALSE,Sourced from website. She loves color orange,,
+,LinkedIn,Cold,Emily Milliman,Architecture,https://www.linkedin.com/in/emily-milliman-pla-asla-leed-ap-a5364912/,www.millimandesignstudio.com,emily@millimandesignstudio.com,,,,,FALSE,FALSE,FALSE,Solo practitioner. They have a Book a Call button. LINK IS BROKEN.,,
+,LinkedIn,Cold,Murray Hibbert,Architecture,https://www.linkedin.com/in/murrayhibbert/,www.habitaction.com,m.hibbert@ihguk.com,,,,,FALSE,FALSE,FALSE,"Growth director, might listen",,
+,LinkedIn,Cold,David Jaehning,Architecture,https://www.linkedin.com/in/davidjaehning/,https://davidjaehning.com/,djaehning@davidjaehning.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Joseph Altshuler,Architecture,https://www.linkedin.com/in/joseph-altshuler-4a183813,https://couldbe.design/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Ryan Stancill,Architecture,https://www.linkedin.com/in/ryanstancill/,,rstancill@gmail.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jesse Klimitz,Architecture,https://www.linkedin.com/in/jklimitz,http://www.bdpquadrangle.com/,jklimitz@bdpquadrangle.com,,,,,FALSE,FALSE,FALSE,"Weak optin: Receive insights and opinions from our global multidisciplinary collective",,
+,LinkedIn,Cold,Mark Finlay,Architecture,https://www.linkedin.com/in/mark-finlay-0ab70241,www.kennedyfitzgerald.com,m.finlay@kennedyfitzgerald.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jonny Mc Kenna,Architecture,https://www.linkedin.com/in/jonny-mc-kenna-13392248/,metwork.co.uk,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Aidan Potter,Architecture,https://www.linkedin.com/in/aidan-potter-87213a236,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Richard Dollamore,Architecture,https://www.linkedin.com/in/richard-dollamore-19b35421,www.whaleback.co.uk,richard@whaleback.co.uk,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Stephen Schwendel Smith,Architecture,https://www.linkedin.com/in/stephen-schwendel-smith-84b6aa53,wrightandwright.co.uk,s.smith@wrightandwright.co.uk,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Oliver Lowrie,Architecture,https://www.linkedin.com/in/oliver-lowrie,ackroydlowrie.com,oliver@ackroydassociates.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Andrew Jackson,Architecture,https://www.linkedin.com/in/andrewjackson91,www.andrewjacksonarchitects.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Chris Senior,Architecture,https://www.linkedin.com/in/chris-senior-4b445642,piparchitecture.co.uk,chris@piparchitecture.co.uk,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Maria Alessandra Segantini,Architecture,https://www.linkedin.com/in/maria-alessandra-segantini-71353259,http://web.cipiuesse.it,pa@cipiuesse.it,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Marc Abdelsayed,Architecture,https://www.linkedin.com/in/marc-abdelsayed-02bb7162,https://www.evok.studio/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Slava Oganesian,Services for Architecture,https://www.linkedin.com/in/slava-oganesian,https://www.lunas.pro/,s.oganesian@lunas.pro,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Patrick Chopson,Architecture,https://www.linkedin.com/in/patrick-chopson-762bbbab,https://cove.inc/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Dan Mihai Muntean,Architecture,https://www.linkedin.com/in/danmihaimuntean,https://mbjdesign.us/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Drew Lang,Architecture,https://www.linkedin.com/in/drew-lang-0655b16,https://langarchitecture.com/,dl@drewlang.com,,,,,FALSE,FALSE,FALSE,"Also involved in brickandwonder.com. Subscribed to Brick and Wonder newsletter 25 Feb. Subscribed to Lang newsletter 25 Feb",,
+,LinkedIn,Cold,Darryl Condon,Architecture,https://www.linkedin.com/in/darrylcondon,https://hcma.ca/people/,d.condon@hcma.ca,,,,,FALSE,FALSE,FALSE,Subscribed to newsletter Feb 25. Marketing and Comms is Jen Cook,,
+,LinkedIn,Cold,George Pond,Architecture,https://www.linkedin.com/in/george-pond-b775191,,gpond@hcm2.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Lauri Morrison,Architecture,https://www.linkedin.com/in/laurimorrison,https://laurimorrison.com/,lauri@laurimorrison.com,,,,,FALSE,FALSE,FALSE,"No email strategy. She has some CTAs to private consultation or specific strategies (ADUs, Fire rebuild)",,
+,LinkedIn,Cold,Tijo Gregory,Services for Architecture,https://www.linkedin.com/in/tijo-gregory,mclinestudios.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Dennis Pieprz,Architecture,https://www.linkedin.com/in/dennis-pieprz-12bb85a,sasaki.com,dpieprz@sasaki.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,David Senden,Architecture,https://www.linkedin.com/in/davidsenden,ktgy.com,dsenden@ktgy.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Patricia Algara,Architecture,https://www.linkedin.com/in/patricia-algara-pla-fasla-95325626,baselandscape.com,patricia@baselandscape.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Tima Bell,Architecture,https://www.linkedin.com/in/tima-bell-577b177,www.belldesigngroup.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Tomaso Bitossi,Services for Architecture,https://www.linkedin.com/in/architettobitossi,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,John Manooch,Services for Architecture,https://www.linkedin.com/in/jmanooch,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Ali Lal Mohammadi,Architecture,https://www.linkedin.com/in/alilal,kirkorarchitects.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Peter Garran,Architecture,https://www.linkedin.com/in/peterwgarran,bimstream.com,peter.garran@bimstream.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Kisha Given,Architecture,https://www.linkedin.com/in/kisha-given-06867a40,givendesigngroup.com,kisha@givendesigngroup.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Stjepan Mikulic,Services for Architecture,https://www.linkedin.com/in/stjepanmikulic,aiinaec.com,stjepan@aiinaec.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Eric Bobrow,Services for Architecture,https://www.linkedin.com/in/ericbobrow,archmarketing.org,eric@archmarketing.org,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Christopher Kempel,Architecture,https://www.linkedin.com/in/christopher-kempel-aia-ncarb-9389025,kempelarchitects.com,ck@kempelarchitects.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Arthur Azoulai,Services for Architecture,https://www.linkedin.com/in/arthurazoulai,slicelab.net,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Bruce Greenfield,Architecture,https://www.linkedin.com/in/brucegreenfieldarchitect,aoarchitects.com,bruceg@aoarchitects.com,,,,,FALSE,FALSE,FALSE,Weak opt in at the bottom of the page. Subscribed Mar 13,,
+,LinkedIn,Cold,Ankur Muchhal,Architecture,https://www.linkedin.com/in/ankurmuchhal,flipspaces.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Tyler Schmetterer,Services for Architecture,https://www.linkedin.com/in/tyler-schmetterer,modx.world,tyler@modx.world,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Erin Pellegrino,Services for Architecture,https://www.linkedin.com/in/erin-pellegrino,,,,,,,FALSE,FALSE,FALSE,Out of Architecture / Matter - check email strategy,,
+,LinkedIn,Cold,Casey McCormick,Services for Architecture,https://www.linkedin.com/in/casey-mccormick-392a8326,marea.ai,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Kevin Zengel,,https://www.linkedin.com/in/kevinzengel,http://www.peteramayer.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Michael Vinh,Architecture,https://www.linkedin.com/in/michael-vinh-aia-500a558,https://steelmanpartners.com/,,,,,,FALSE,FALSE,FALSE,"Strange way to capture emails. Entered/subscribed on 13 March",,
+,LinkedIn,Cold,Jamie Pfeffer,Architecture,https://www.linkedin.com/in/jamie-pfeffer-26aa5522,pfeffertorode.com,jamie@pfeffertorode.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,R. Anthony Fieldman,Architecture,https://www.linkedin.com/in/r-anthony-fieldman-b456984,https://www.anthonyfieldman.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Iben Falconer,Services for Architecture,https://www.linkedin.com/in/ibenfalconer,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Sughandha M Goel,Services for Architecture,https://www.linkedin.com/in/sughandha-m-goel-77682760,,,,,,,,FALSE,FALSE,FALSE,Founder of 2 SaaS for AEC,,
+,LinkedIn,Cold,Ben Ridderbos,Architecture,https://www.linkedin.com/in/ben-ridderbos-aia-leed-ap-ncarb-62761617,rossetti.com,bridderbos@rossetti.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Michael Kershner,Services for Architecture,https://www.linkedin.com/in/michaelkershner,innovateilluminate.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Michael Morris,Architecture,https://www.linkedin.com/in/michaelmorrissatostudio2026,morrissato.com,michael@morrissato.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Niknaz Aftahi,Services for Architecture,https://www.linkedin.com/in/niknazaftahi,aecplustech.com,niknaz@aecplustech.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Isra Banks,Architecture,https://www.linkedin.com/in/isra-banks-aia-ncarb-leed-ap-well-ap-211b9626,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Louai Alsaman,Architecture,https://www.linkedin.com/in/louai-alsaman,https://donloularchitects.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Michael Miller,Architecture,https://www.linkedin.com/in/michael-miller-41781b4,https://www.steinberghart.com/,,,,,,FALSE,FALSE,FALSE,Samantha Chastang is Director of Mkt & Comms,,
+,LinkedIn,Cold,Ryan Lovett,Developer,https://www.linkedin.com/in/ryanhlovett,https://lovett.city/,ryan@lovett.city,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Bob Borson,Architecture,https://www.linkedin.com/in/bborson,bokapowell.com,,,,,,FALSE,FALSE,FALSE,https://www.lifeofanarchitect.com/,,
+,LinkedIn,Cold,Rory Carroll,Architecture,https://www.linkedin.com/in/rory-carroll-8484598,axisonline.net,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Kenneth Crutcher,Architecture,https://www.linkedin.com/in/crutcherk,,crutcherk@crutcherstudio.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Carlos Osuna Sanchez,Real Estate Agent,https://www.linkedin.com/in/carlososuna,www.urbanopolis.mx,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Thomas Dioro,Tech,https://www.linkedin.com/in/thomas-dioro-a7258829,podfathermedia.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jaron Lubin,Architecture,https://www.linkedin.com/in/jaron-lubin-9950385,safdiearchitects.com,jlubin@msafdie.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Joseph Barnes,Architecture,https://www.linkedin.com/in/joseph-barnes-96794616,http://www.RATIOdesign.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Matthew Melnyk,Services for Architecture,https://www.linkedin.com/in/matthew-melnyk-s-e-b1714a18,nousengineering.com,matthew.melnyk@nousengineering.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Ariel Brain,Architecture,https://www.linkedin.com/in/ariel-brain-aia-leed-ap-55430410,http://www.cbtarchitects.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Antoine van Erp,Architecture,https://www.linkedin.com/in/antoine-van-erp-0a002b5,http://www.mattermakers.nl/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Colby Mayes,Architecture,https://www.linkedin.com/in/colby-mayes-0b907924,MayesOffice.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Alex Yuen,Architecture,https://www.linkedin.com/in/abcyuen,,ayuen@co-operations.org,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Eric Turcotte,Architecture,https://www.linkedin.com/in/eric-turcotte-34a41329,urbanstrategies.com,eturcotte@urbanstrategies.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Daniel Horowitz,Architecture,https://www.linkedin.com/in/daniel-horowitz-aia-38379914,,danielhorowitz31@gmail.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Alaa BouGhanem,Architecture,https://www.linkedin.com/in/alaaboughanem,abgnc.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Phil Read,Architecture,https://www.linkedin.com/in/readphil,readthomas.com,phil@readthomas.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Marcelo Spina,Architecture,https://www.linkedin.com/in/marcelo-spina-9205579,patterns.work,mspina@patterns.work,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Michael V. Suriano,Architecture,https://www.linkedin.com/in/mvsuriano,nbbj.com,msuriano@nbbj.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Gabe Guilliams,Architecture,https://www.linkedin.com/in/gabe-guilliams-b7b8384,http://www.burohappold.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Michael Dalezman,Architecture,https://www.linkedin.com/in/michael-dalezman-b322b710,http://www.michaelgraves.com,mdalezman@michaelgraves.com,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Karen Nichols,Architecture,https://www.linkedin.com/in/karen-nichols-63b0bb86/,http://www.michaelgraves.com,knichols@michaelgraves.com,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Dodie Colavecchio,Architecture,https://www.linkedin.com/in/dorothy-dodie-colavecchio-9a84ab27/,http://www.michaelgraves.com,dcolavecchio@michaelgraves.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Winka Dubbeldam,Architecture,https://www.linkedin.com/in/winka-dubbeldam-94202b5/,archi-tectonics.com,wd@archi-tectonics.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Matt Plecity,Architecture,https://www.linkedin.com/in/matt-plecity-4207546,https://www.gbbn.com/,,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Jennifer Sebranek,Architecture,,https://www.gbbn.com/,,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Alyssa Brandt,Architecture,,https://www.gbbn.com/,abrandt@gbbn.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Honyi Wang,Architecture,https://www.linkedin.com/in/honyi-wang-aia-noma-4a609b10,https://handelarchitects.com/,hwang@handelarchitects.com,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Jonathan Kinsley,Architecture,,https://handelarchitects.com/,jkinsley@handelarchitects.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,David Bell,Architecture,https://www.linkedin.com/in/david-bell-faia-leed-ap-ab16641,BELLarchitects.com,david.bell@bellarchitects.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Ar. Ankit Kansara,Services for Architecture,https://www.linkedin.com/in/ankitkumarkansara,virtualbuildingstudio.com,ankit.kansara@virtualbuildingstudio.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Elisabeth Brewer,Architecture,https://www.linkedin.com/in/elisabeth-brewer-assoc-aia,embarchitecture.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Sami Khoury,Architecture,https://www.linkedin.com/in/samikhoury,https://www.acmartin.com/,,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Bee Rarewala,Architecture,https://www.linkedin.com/in/bee627,https://www.acmartin.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Stefano Poisl,Architecture,https://www.linkedin.com/in/stefanopoisl,https://goree.com/,,,,,,FALSE,FALSE,FALSE,,,
+,Email,Cold,Rachel Koehring,Architecture,https://www.linkedin.com/in/rachel-koehring-4a3b9aa2/,https://goree.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Matthew Jarmel,Architecture,https://www.linkedin.com/in/mattjarmel,jarmelkizel.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Susan Jones,Architecture,https://www.linkedin.com/in/susan-jones-b4388a3,atelierjones.com,susan@atelierjones.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Zenon Radewych,Architecture,https://www.linkedin.com/in/zenon-radewych-21633a25,wzmh.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Vardhan Mehta,Services for Architecture,https://www.linkedin.com/in/vardhan-acelab,acelabusa.com,vardhan@acelabusa.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Kyle Boyd,Architecture,https://www.linkedin.com/in/kyle-boyd-design,kyleboyd.design,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Christopher D'Amico,Architecture,https://www.linkedin.com/in/christopher-d-amico-935189111,https://www.overhead-studio.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Philip Dugdale,Architecture,https://www.linkedin.com/in/pmdugdale,sasaki.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jake Plummer,Architecture,https://www.linkedin.com/in/jake-plummer-aia-leed-ap-well-ap-46ab451/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Bryan Boyer,Architecture,https://www.linkedin.com/in/bryanboyer,dashmarshall.com,info@dashmarshall.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,David Ortiz,Services for Architecture,https://www.linkedin.com/in/davidortizolympique,facadeaccess.com,david@facadeaccess.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Sandra Bonito,Architecture,https://www.linkedin.com/in/sandra-bonito-ba655515,Www.velarddc.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jennifer Lozano Castillo,Architecture,https://www.linkedin.com/in/jennifer-lozano-castillo-aia-1770b426,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Greg Sheldon,Architecture,https://www.linkedin.com/in/greg-sheldon-0aab85a,https://www.bnim.com/,gsheldon@bnim.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Jayant Gupta,Architecture,https://www.linkedin.com/in/jayant-gupta-0797755,http://architecture49.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Douglass Alligood,Architecture,https://www.linkedin.com/in/douglass-alligood-faia-ncarb-leed-ap-noma-28094410,https://www.alligoodsong.com/,dalligood@alligoodsong.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Alexander L Hirsch,Architecture,https://www.linkedin.com/in/the-alexander-l-hirsch-aia-associate-group-3ba43535,ahbdp.com,ah@ahbdp.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Daniela Deutsch,Architecture,https://www.linkedin.com/in/daniela-deutsch-31104015,exitecture.com,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Salam Rida,Architecture,https://www.linkedin.com/in/salam-rida,9XSDESIGN.COM,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Rafael Pelli,Architecture,https://www.linkedin.com/in/rafael-pelli-faia-88282285,pcparch.com,rpelli@pcparch.com,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Nora Hoxha,Architecture,https://www.linkedin.com/in/norahoxha,http://www.hoxhadesignstudio.com/,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Carlo Pierozzi,Architecture,https://www.linkedin.com/in/carlopierozzi,pnpconsulting.ca,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Janis Pieterwas,Architecture,https://www.linkedin.com/in/janis-pieterwas/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Lucy Smith,Architecture,https://www.linkedin.com/in/lucy-smith-20488b36/,,,,,,,FALSE,FALSE,FALSE,Pending invite,,
+,LinkedIn,Cold,Telemak Alberti,Architecture,https://www.linkedin.com/in/telemak-alberti-86b27228/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Breanna Urquhart,Architecture,https://www.linkedin.com/in/breanna-urquhart-725a1287/,,,,,,,FALSE,FALSE,FALSE,,,
+,LinkedIn,Cold,Anna Rutherford,Architecture,https://www.linkedin.com/in/anna-rutherford-28a3b535,,,,,,,FALSE,FALSE,FALSE,Target at Alexandra Rd and Verdun Rd. Reno and extensions is a competitive market so you can get an edge.,,
+,LinkedIn,Cold,Pam Raymond,Architecture,https://www.linkedin.com/in/pam-raymond-60a0ab9/,,,,,,,FALSE,FALSE,FALSE,,,
+,,Cold,Wesley Wong,Architecture,,,,,,,,FALSE,FALSE,FALSE,,,`;
+
+  // ── Parse CSV (same logic as crm.html) ──────────────────────────
+  function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (!lines.length) return [];
+    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+    return lines.slice(1).map(line => {
+      const vals = []; let cur='', inQ=false;
+      for(let i=0;i<line.length;i++){
+        if(line[i]==='"'){ inQ=!inQ; }
+        else if(line[i]===','&&!inQ){ vals.push(cur); cur=''; }
+        else { cur+=line[i]; }
+      }
+      vals.push(cur);
+      const row = {};
+      headers.forEach((h,i) => row[h] = (vals[i]||'').trim());
+      return row;
+    }).filter(row => Object.values(row).some(v=>v));
+  }
+
+  function csvRowToContact(row) {
+    const g = (...keys) => { for(const k of keys){ const f=Object.keys(row).find(rk=>rk.toLowerCase().includes(k.toLowerCase())); if(f&&row[f]) return row[f]; } return ''; };
+    // Fixed bool: handles dates as truthy, handles TRUE/FALSE, empty as false
+    const bool = v => { if(!v||v==='-'||v==='–') return false; const s=String(v).toLowerCase().trim(); return s!=='false'&&s!=='n'&&s!=='no'&&s!=='0'; };
+    const clean = v => (!v||v.trim()==='-'||v.trim()==='–') ? '' : v.trim();
+    return {
+      source: g('source'), type: g('type'), name: g('name','first'), industry: g('industry'),
+      linkedin_url: clean(g('social','linkedin')), website: clean(g('website')),
+      email_or_phone: clean(g('email','phone')), first_contact_date: g('first contact','date'),
+      bump1: bool(g('gentle','bump1','1 ')), bump2: bool(g('value','nudge','bump2')),
+      bump3: bool(g('last shot','bump3','4-5')), response: bool(g('response')),
+      loom_sent: bool(g('loom')), sales_call: bool(g('sales call','call')),
+      notes: g('notes','message'), answer: g('answer'),
+      revenue: parseFloat(g('revenue'))||0,
+    };
+  }
+
+  // ── Run import ────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const existing = JSON.parse(localStorage.getItem('crm_contacts')||'[]');
+    if (existing.length > 0) {
+      document.getElementById('icon').textContent = '✅';
+      document.getElementById('title').textContent = 'Already imported!';
+      document.getElementById('msg').textContent = `You already have ${existing.length} contacts. Redirecting to CRM...`;
+      document.getElementById('progress').style.width = '100%';
+      setTimeout(() => window.location.href = 'crm.html', 2000);
+      return;
+    }
+
+    const rows = parseCSV(CSV);
+    const contacts = [];
+    let i = 0;
+
+    function processNext() {
+      if (i >= rows.length) {
+        // Done - save and redirect
+        localStorage.setItem('crm_contacts', JSON.stringify(contacts));
+        document.getElementById('icon').textContent = '✅';
+        document.getElementById('title').textContent = `Imported ${contacts.length} contacts!`;
+        document.getElementById('msg').textContent = 'Redirecting to your CRM...';
+        document.getElementById('progress').style.width = '100%';
+        document.getElementById('btn').classList.remove('hidden');
+        setTimeout(() => window.location.href = 'crm.html', 2000);
+        return;
+      }
+
+      const c = csvRowToContact(rows[i]);
+      if (c.name.trim()) {
+        contacts.push({
+          ...c,
+          id: Date.now() + contacts.length,
+          linkedin_photo: '', linkedin_headline: '', linkedin_company: '',
+          linkedin_location: '', website_title: '', website_description: '',
+          enriched_at: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+
+      i++;
+      const pct = Math.round((i / rows.length) * 100);
+      document.getElementById('progress').style.width = pct + '%';
+      document.getElementById('msg').textContent = `Processing ${i} of ${rows.length}...`;
+
+      setTimeout(processNext, 0); // yield to browser for smooth progress bar
+    }
+
+    processNext();
+  });
+  </script>
+</body>
+</html>

@@ -23,40 +23,39 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel">
-    const { useState, useEffect, useCallback, useRef } = React;
+    const { useState, useEffect, useRef } = React;
 
     /* ─── CONSTANTS ──────────────────────────────────── */
-    const SOURCES = ['Phone','WhatsApp','Email','LinkedIn','Instagram'];
-    const TYPES   = ['Leak','Faucet','Cold'];
+    const SOURCES  = ['Phone','WhatsApp','Email','LinkedIn','Instagram'];
+    const TYPES    = ['Leak','Faucet','Cold'];
+    const STATUSES = ['not started','to follow up','ongoing','closed','discarded'];
     const SOURCE_COLOR = { LinkedIn:'bg-blue-100 text-blue-700', Email:'bg-purple-100 text-purple-700', Phone:'bg-green-100 text-green-700', WhatsApp:'bg-emerald-100 text-emerald-700', Instagram:'bg-pink-100 text-pink-700' };
     const TYPE_COLOR   = { Leak:'bg-cyan-100 text-cyan-700', Faucet:'bg-teal-100 text-teal-700', Cold:'bg-gray-100 text-gray-600' };
+    const STATUS_COLOR = { 'not started':'bg-gray-100 text-gray-500', 'to follow up':'bg-amber-100 text-amber-700', 'ongoing':'bg-blue-100 text-blue-700', 'closed':'bg-emerald-100 text-emerald-700', 'discarded':'bg-red-100 text-red-400' };
     const AV_COLORS    = ['bg-indigo-500','bg-purple-500','bg-pink-500','bg-rose-500','bg-orange-500','bg-amber-500','bg-emerald-500','bg-teal-500','bg-cyan-500','bg-blue-500'];
     const PIPELINE = [
-      { key:'first_contact_date', label:'1st', isDate:true },
+      { key:'first_contact_date', label:'1st' },
       { key:'bump1', label:'Bump 1' },
       { key:'bump2', label:'Bump 2' },
       { key:'bump3', label:'Last Shot' },
-      { key:'response', label:'Response' },
-      { key:'loom_sent', label:'Loom' },
-      { key:'sales_call', label:'Sales Call' },
     ];
-    const DEFAULTS = { source:'', type:'', name:'', industry:'', linkedin_url:'', website:'', email_or_phone:'', first_contact_date:'', bump1:false, bump2:false, bump3:false, response:false, loom_sent:false, sales_call:false, notes:'', answer:'', revenue:0, linkedin_photo:'', linkedin_headline:'', linkedin_company:'', linkedin_location:'', website_title:'', website_description:'', enriched_at:null };
+    const DEFAULTS = { source:'', type:'Cold', name:'', industry:'Architecture', linkedin_url:'', website:'', email_or_phone:'', first_contact_date:'', first_contact_message:'', bump1:false, bump1_date:'', bump2:false, bump2_date:'', bump3:false, bump3_date:'', response:false, loom_sent:false, sales_call:false, notes:'', answer:'', revenue:0, status:'not started', linkedin_photo:'', linkedin_headline:'', linkedin_company:'', linkedin_location:'', website_title:'', website_description:'', enriched_at:null };
 
     /* ─── STORAGE ────────────────────────────────────── */
     const S = {
-      all:  ()    => JSON.parse(localStorage.getItem('crm_contacts') || '[]'),
-      save: (arr) => localStorage.setItem('crm_contacts', JSON.stringify(arr)),
-      add:  (d)   => { const a = S.all(); const c = { ...DEFAULTS, ...d, id: Date.now(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; S.save([c,...a]); return c; },
+      all:  ()      => JSON.parse(localStorage.getItem('crm_contacts') || '[]'),
+      save: (arr)   => localStorage.setItem('crm_contacts', JSON.stringify(arr)),
+      add:  (d)     => { const a = S.all(); const c = { ...DEFAULTS, ...d, id: Date.now(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() }; S.save([c,...a]); return c; },
       upd:  (id, d) => { const a = S.all(); const i = a.findIndex(c=>c.id===id); if(i>=0){ a[i]={...a[i],...d,updated_at:new Date().toISOString()}; S.save(a); return a[i]; } },
-      del:  (id)  => S.save(S.all().filter(c=>c.id!==id)),
-      getSetting: k => localStorage.getItem('crm_'+k)||'',
+      del:  (id)    => S.save(S.all().filter(c=>c.id!==id)),
+      getSetting: k   => localStorage.getItem('crm_'+k)||'',
       setSetting: (k,v) => localStorage.setItem('crm_'+k, v),
     };
 
     /* ─── ENRICH ─────────────────────────────────────── */
     async function enrichLinkedIn(contact) {
       const key = S.getSetting('proxycurl_key');
-      if (!key) throw new Error('No Proxycurl API key.\nClick ⚙ Settings (top-right) to add it.\nGet a free key at nubela.co/proxycurl');
+      if (!key) throw new Error('No Proxycurl API key.\nClick ⚙ Settings to add it.\nGet a free key at nubela.co/proxycurl');
       if (!contact.linkedin_url) throw new Error('No LinkedIn URL on this contact.');
       const res = await fetch(`https://nubela.co/proxycurl/api/v2/linkedin?url=${encodeURIComponent(contact.linkedin_url)}&use_cache=if-present`, { headers:{ Authorization:`Bearer ${key}` } });
       if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.description || `Proxycurl error ${res.status}`); }
@@ -85,6 +84,13 @@
     const fmtCurrency = n => n > 0 ? '$'+Number(n).toLocaleString() : '';
     const fmtDate     = s => s ? new Date(s).toLocaleDateString() : '';
 
+    function autoStatus(f) {
+      if (f.status === 'closed' || f.status === 'discarded') return f.status;
+      if (f.response) return 'ongoing';
+      if (f.first_contact_date) return 'to follow up';
+      return 'not started';
+    }
+
     function parseCSV(text) {
       const lines = text.split(/\r?\n/).filter(Boolean);
       if (!lines.length) return [];
@@ -105,27 +111,28 @@
 
     function csvRowToContact(row) {
       const g = (...keys) => { for(const k of keys){ const f=Object.keys(row).find(rk=>rk.toLowerCase().includes(k.toLowerCase())); if(f&&row[f]) return row[f]; } return ''; };
-      const bool = v => ['y','yes','true','1'].includes(String(v).toLowerCase().trim());
-      return {
+      const bool = v => { if(!v||v==='-'||v==='–') return false; const s=String(v).toLowerCase().trim(); return s!=='false'&&s!=='n'&&s!=='no'&&s!=='0'; };
+      const clean = v => (!v||v.trim()==='-'||v.trim()==='–') ? '' : v.trim();
+      const c = {
         source: g('source'), type: g('type'), name: g('name','first'), industry: g('industry'),
-        linkedin_url: g('social','linkedin'), website: g('website'),
-        email_or_phone: g('email','phone'), first_contact_date: g('first contact','date'),
+        linkedin_url: clean(g('social','linkedin')), website: clean(g('website')),
+        email_or_phone: clean(g('email','phone')), first_contact_date: g('first contact','date'),
         bump1: bool(g('gentle','bump1','1 ')), bump2: bool(g('value','nudge','bump2')),
         bump3: bool(g('last shot','bump3','4-5')), response: bool(g('response')),
         loom_sent: bool(g('loom')), sales_call: bool(g('sales call','call')),
+        first_contact_message: g('message sent','first contact message'),
         notes: g('notes','message'), answer: g('answer'),
         revenue: parseFloat(g('revenue'))||0,
       };
+      c.status = autoStatus({...DEFAULTS, ...c});
+      return c;
     }
 
     function exportCSV(contacts) {
-      const headers = ['Name','Source','Type','Industry','LinkedIn','Website','Email/Phone','First Contact','Bump1','Bump2','Bump3','Response','Loom','Sales Call','Notes','Answer','Revenue'];
-      const rows = contacts.map(c => [c.name,c.source,c.type,c.industry,c.linkedin_url,c.website,c.email_or_phone,c.first_contact_date,c.bump1?'Y':'N',c.bump2?'Y':'N',c.bump3?'Y':'N',c.response?'Y':'N',c.loom_sent?'Y':'N',c.sales_call?'Y':'N',`"${(c.notes||'').replace(/"/g,'""')}"`,`"${(c.answer||'').replace(/"/g,'""')}"`,c.revenue]);
+      const headers = ['Name','Source','Type','Industry','LinkedIn','Website','Email/Phone','First Contact','Message Sent','Bump1','Bump1 Date','Bump2','Bump2 Date','Bump3','Bump3 Date','Response','Loom','Sales Call','Status','Notes','Answer','Revenue'];
+      const rows = contacts.map(c => [c.name,c.source,c.type,c.industry,c.linkedin_url,c.website,c.email_or_phone,c.first_contact_date,`"${(c.first_contact_message||'').replace(/"/g,'""')}"`,c.bump1?'Y':'N',c.bump1_date||'',c.bump2?'Y':'N',c.bump2_date||'',c.bump3?'Y':'N',c.bump3_date||'',c.response?'Y':'N',c.loom_sent?'Y':'N',c.sales_call?'Y':'N',c.status||'not started',`"${(c.notes||'').replace(/"/g,'""')}"`,`"${(c.answer||'').replace(/"/g,'""')}"`,c.revenue]);
       const csv = [headers.join(','), ...rows.map(r=>r.join(','))].join('\n');
-      const a = document.createElement('a');
-      a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-      a.download = 'crm-contacts-'+new Date().toISOString().slice(0,10)+'.csv';
-      a.click();
+      const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download = 'crm-contacts-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
     }
 
     /* ─── COMPONENTS ─────────────────────────────────── */
@@ -133,10 +140,8 @@
     function Avatar({ contact, size='md' }) {
       const [err, setErr] = useState(false);
       const sz = size==='lg' ? 'w-14 h-14 text-lg' : 'w-11 h-11 text-sm';
-      if (contact.linkedin_photo && !err) {
-        return <img src={contact.linkedin_photo} alt={contact.name} onError={()=>setErr(true)}
-          className={`${sz} rounded-full object-cover ring-2 ring-gray-100 flex-shrink-0`} />;
-      }
+      if (contact.linkedin_photo && !err)
+        return <img src={contact.linkedin_photo} alt={contact.name} onError={()=>setErr(true)} className={`${sz} rounded-full object-cover ring-2 ring-gray-100 flex-shrink-0`} />;
       return <div className={`${sz} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${avatarColor(contact.name)}`}>{initials(contact.name)}</div>;
     }
 
@@ -145,8 +150,17 @@
       return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>{label}</span>;
     }
 
+    function CheckCircle({ done, label }) {
+      return (
+        <div className="flex flex-col items-center gap-0.5">
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done ? 'bg-emerald-500 text-white' : 'bg-gray-100 border border-gray-200 text-transparent'}`}>✓</div>
+          <span className={`text-[9px] leading-none ${done ? 'text-emerald-500 font-semibold' : 'text-gray-300'}`}>{label}</span>
+        </div>
+      );
+    }
+
     function PipelineBar({ contact }) {
-      const steps = PIPELINE.map(s => ({ ...s, done: s.isDate ? !!contact[s.key] : !!contact[s.key] }));
+      const steps = PIPELINE.map(s => ({ ...s, done: !!contact[s.key] }));
       const done = steps.filter(s=>s.done).length;
       return (
         <div>
@@ -180,72 +194,67 @@
       const isEmail = (contact.email_or_phone||'').includes('@');
       const rev = parseFloat(contact.revenue)||0;
       const domain = (() => { try { return new URL(contact.website.startsWith('http')?contact.website:'https://'+contact.website).hostname; } catch { return contact.website; } })();
+      const status = contact.status || 'not started';
+      const statusClr = STATUS_COLOR[status] || STATUS_COLOR['not started'];
+
+      const handleCardClick = e => {
+        if (e.target.closest('a, button')) return;
+        onEdit(contact);
+      };
 
       return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all overflow-hidden flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all overflow-hidden flex flex-col cursor-pointer group" onClick={handleCardClick}>
           {/* Top */}
           <div className="p-4 pb-3">
             <div className="flex items-start gap-3">
               <Avatar contact={contact} />
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-900 text-base leading-tight truncate">{contact.name||'Unnamed'}</h3>
+                <h3 className="font-semibold text-gray-900 text-base leading-tight truncate group-hover:text-indigo-600 transition-colors">{contact.name||'Unnamed'}</h3>
                 {contact.linkedin_headline && <p className="text-sm text-gray-500 mt-0.5 lc1">{contact.linkedin_headline}</p>}
-                {(contact.linkedin_company||contact.industry) && (
-                  <p className="text-xs text-gray-400 mt-0.5 lc1">{[contact.linkedin_company,contact.industry].filter(Boolean).join(' · ')}</p>
-                )}
+                {(contact.linkedin_company||contact.industry) && <p className="text-xs text-gray-400 mt-0.5 lc1">{[contact.linkedin_company,contact.industry].filter(Boolean).join(' · ')}</p>}
                 {contact.linkedin_location && <p className="text-xs text-gray-400 mt-0.5">📍 {contact.linkedin_location}</p>}
               </div>
               <div className="relative flex-shrink-0" ref={menuRef}>
-                <button onClick={()=>setMenu(!menu)} className="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-300 hover:text-gray-500 text-xl leading-none font-bold transition">⋯</button>
+                <button onClick={e=>{e.stopPropagation();setMenu(!menu)}} className="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-300 hover:text-gray-500 text-xl leading-none font-bold transition">⋯</button>
                 {menu && (
                   <div className="absolute right-0 top-8 w-36 bg-white border border-gray-100 rounded-xl shadow-xl z-20 py-1 text-sm">
-                    <button onClick={()=>{onEdit(contact);setMenu(false)}} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 text-gray-700">✏️ Edit</button>
-                    <button onClick={()=>{onEnrich(contact);setMenu(false)}} disabled={enriching} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-indigo-600 disabled:opacity-50">
-                      {enriching ? '⏳ Enriching...' : '✨ Enrich'}
-                    </button>
+                    <button onClick={e=>{e.stopPropagation();onEdit(contact);setMenu(false)}} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 text-gray-700">✏️ Edit</button>
+                    <button onClick={e=>{e.stopPropagation();onEnrich(contact);setMenu(false)}} disabled={enriching} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-50 text-indigo-600 disabled:opacity-50">{enriching ? '⏳ Enriching...' : '✨ Enrich'}</button>
                     <hr className="my-1 border-gray-100"/>
-                    <button onClick={()=>{onDelete(contact.id);setMenu(false)}} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-red-50 text-red-500">🗑 Delete</button>
+                    <button onClick={e=>{e.stopPropagation();onDelete(contact.id);setMenu(false)}} className="w-full text-left flex items-center gap-2 px-3 py-1.5 hover:bg-red-50 text-red-500">🗑 Delete</button>
                   </div>
                 )}
               </div>
             </div>
-
             {/* Links */}
             <div className="flex flex-wrap gap-3 mt-3 text-xs">
-              {contact.linkedin_url && (
-                <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-8 13H7v-7h4v7zm-2-8.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm10 8.5h-4v-3.5c0-1-.4-1.5-1.1-1.5-.8 0-1.4.6-1.4 1.5V16h-4V9h4v1.1c.5-.8 1.4-1.4 2.5-1.4 2 0 4 1.3 4 4.1V16z"/></svg>
-                  LinkedIn
-                </a>
-              )}
-              {contact.website && (
-                <a href={contact.website.startsWith('http')?contact.website:'https://'+contact.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-gray-500 hover:underline">
-                  🌐 {contact.website_title || domain}
-                </a>
-              )}
-              {contact.email_or_phone && (
-                <span className="flex items-center gap-1 text-gray-400">{isEmail?'✉️':'📞'} {contact.email_or_phone}</span>
-              )}
+              {contact.linkedin_url && <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="flex items-center gap-1 text-blue-600 hover:underline"><svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-8 13H7v-7h4v7zm-2-8.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm10 8.5h-4v-3.5c0-1-.4-1.5-1.1-1.5-.8 0-1.4.6-1.4 1.5V16h-4V9h4v1.1c.5-.8 1.4-1.4 2.5-1.4 2 0 4 1.3 4 4.1V16z"/></svg>LinkedIn</a>}
+              {contact.website && <a href={contact.website.startsWith('http')?contact.website:'https://'+contact.website} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="flex items-center gap-1 text-gray-500 hover:underline">🌐 {contact.website_title || domain}</a>}
+              {contact.email_or_phone && <span className="flex items-center gap-1 text-gray-400">{isEmail?'✉️':'📞'} {contact.email_or_phone}</span>}
             </div>
           </div>
 
-          {/* Pipeline */}
+          {/* Pipeline bar */}
           <div className="px-4 py-3 border-t border-gray-50">
             <PipelineBar contact={contact} />
           </div>
 
+          {/* Response / Loom / Sales Call circles */}
+          <div className="px-4 py-2.5 border-t border-gray-50 flex items-center gap-5">
+            <CheckCircle done={!!contact.response} label="Response" />
+            <CheckCircle done={!!contact.loom_sent} label="Loom" />
+            <CheckCircle done={!!contact.sales_call} label="Sales Call" />
+          </div>
+
           {/* Notes */}
-          {contact.notes && (
-            <div className="px-4 py-2.5 border-t border-gray-50">
-              <p className="text-xs text-gray-400 lc2 italic">"{contact.notes}"</p>
-            </div>
-          )}
+          {contact.notes && <div className="px-4 py-2.5 border-t border-gray-50"><p className="text-xs text-gray-400 lc2 italic">"{contact.notes}"</p></div>}
 
           {/* Footer */}
           <div className="px-4 py-2.5 border-t border-gray-50 mt-auto flex items-center justify-between flex-wrap gap-1">
             <div className="flex flex-wrap gap-1.5 items-center">
               {contact.source && <Badge label={contact.source} colorClass={SOURCE_COLOR[contact.source]||'bg-gray-100 text-gray-600'} />}
               {contact.type   && <Badge label={contact.type}   colorClass={TYPE_COLOR[contact.type]||'bg-gray-100 text-gray-600'} />}
+              <Badge label={status} colorClass={statusClr} />
               {contact.enriched_at && <span className="text-xs text-gray-200">✓ {fmtDate(contact.enriched_at)}</span>}
             </div>
             <div className="flex items-center gap-2">
@@ -275,23 +284,67 @@
       );
     }
 
-    function ContactModal({ contact, onSave, onClose }) {
+    const BUMP1_MSGS = [
+      'Just bumping this up — worth a quick look?',
+      'Circling back in case this got buried. Quick look?',
+      'Bumping this to the top. Worth 2 minutes?',
+      'Just following up — wanted to make sure this didn\'t get lost.',
+    ];
+
+    function ContactModal({ contact, onSave, onSaveAndNew, onClose }) {
       const [f, setF] = useState({ ...DEFAULTS, ...(contact||{}) });
+      const [copied, setCopied] = useState(null);
+      const [copiedMsg, setCopiedMsg] = useState(false);
       const set = k => v => setF(p=>({...p,[k]:v}));
-      const setBool = k => v => setF(p=>({...p,[k]:!!v}));
+      const today = new Date().toISOString().slice(0,10);
+
+      // Smart setters that also auto-update status
+      const setFirstContact = v => setF(p => {
+        const n = {...p, first_contact_date: v};
+        if (n.status !== 'closed' && n.status !== 'discarded') n.status = autoStatus(n);
+        return n;
+      });
+      const setResponse = v => setF(p => {
+        const n = {...p, response: !!v};
+        if (n.status !== 'closed' && n.status !== 'discarded') n.status = autoStatus(n);
+        return n;
+      });
+
+      // Esc = save
+      const fRef = useRef(f);
+      useEffect(() => { fRef.current = f; });
+      useEffect(() => {
+        const handler = e => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            const cur = fRef.current;
+            if (cur.name.trim()) onSave(cur); else onClose();
+          }
+        };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+      }, []);
 
       const submit = e => {
-        e.preventDefault();
+        e && e.preventDefault();
         if (!f.name.trim()) { alert('Name is required'); return; }
         onSave(f);
       };
 
+      const handleBackdrop = e => {
+        if (e.target !== e.currentTarget) return;
+        if (f.name.trim()) onSave(f); else onClose();
+      };
+
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-bg">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-bg" onClick={handleBackdrop}>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-500 flex-shrink-0">
               <h2 className="text-white font-bold text-lg">{contact ? 'Edit Contact' : 'New Contact'}</h2>
-              <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
+              <div className="flex items-center gap-3">
+                <span className="text-white/50 text-xs hidden sm:block">Esc to save</span>
+                <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
+              </div>
             </div>
 
             <form onSubmit={submit} className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -300,7 +353,7 @@
                 <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Basic Info</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Full Name *"><input className={inp} value={f.name} onChange={e=>set('name')(e.target.value)} placeholder="First Last" /></Field>
-                  <Field label="Industry"><input className={inp} value={f.industry} onChange={e=>set('industry')(e.target.value)} placeholder="SaaS, E-commerce..." /></Field>
+                  <Field label="Industry"><input className={inp} value={f.industry} onChange={e=>set('industry')(e.target.value)} placeholder="SaaS, Architecture..." /></Field>
                   <Field label="Source">
                     <select className={sel} value={f.source} onChange={e=>set('source')(e.target.value)}>
                       <option value="">— None —</option>
@@ -313,6 +366,11 @@
                       {TYPES.map(t=><option key={t}>{t}</option>)}
                     </select>
                   </Field>
+                  <Field label="Status">
+                    <select className={sel} value={f.status||'not started'} onChange={e=>set('status')(e.target.value)}>
+                      {STATUSES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                    </select>
+                  </Field>
                 </div>
               </div>
 
@@ -320,8 +378,18 @@
               <div>
                 <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Contact Details</h3>
                 <div className="space-y-3">
-                  <Field label="LinkedIn Profile URL"><input className={inp} value={f.linkedin_url} onChange={e=>set('linkedin_url')(e.target.value)} placeholder="https://linkedin.com/in/..." /></Field>
-                  <Field label="Website"><input className={inp} value={f.website} onChange={e=>set('website')(e.target.value)} placeholder="https://example.com" /></Field>
+                  <Field label="LinkedIn Profile URL">
+                    <div className="flex gap-2">
+                      <input className={inp} value={f.linkedin_url} onChange={e=>set('linkedin_url')(e.target.value)} placeholder="https://linkedin.com/in/..." />
+                      {f.linkedin_url && <a href={f.linkedin_url.startsWith('http')?f.linkedin_url:'https://'+f.linkedin_url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-10 flex items-center justify-center border border-gray-200 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-300 text-gray-400 hover:text-blue-600 transition text-base">↗</a>}
+                    </div>
+                  </Field>
+                  <Field label="Website">
+                    <div className="flex gap-2">
+                      <input className={inp} value={f.website} onChange={e=>set('website')(e.target.value)} placeholder="https://example.com" />
+                      {f.website && <a href={f.website.startsWith('http')?f.website:'https://'+f.website} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-10 flex items-center justify-center border border-gray-200 rounded-lg bg-white hover:bg-blue-50 hover:border-blue-300 text-gray-400 hover:text-blue-600 transition text-base">↗</a>}
+                    </div>
+                  </Field>
                   <Field label="Email or Phone"><input className={inp} value={f.email_or_phone} onChange={e=>set('email_or_phone')(e.target.value)} placeholder="email@example.com or +1 555 000 0000" /></Field>
                 </div>
               </div>
@@ -329,14 +397,82 @@
               {/* Pipeline */}
               <div>
                 <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Pipeline</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field label="First Contact Date"><input type="date" className={inp} value={f.first_contact_date} onChange={e=>set('first_contact_date')(e.target.value)} /></Field>
-                  <div className="flex items-end pb-1"><Toggle checked={!!f.bump1} onChange={setBool('bump1')} label="1 Gentle Bump" /></div>
-                  <Toggle checked={!!f.bump2} onChange={setBool('bump2')} label="2 Value Nudge" />
-                  <Toggle checked={!!f.bump3} onChange={setBool('bump3')} label="4–5 Last Shot" />
-                  <Toggle checked={!!f.response} onChange={setBool('response')} label="Response received" />
-                  <Toggle checked={!!f.loom_sent} onChange={setBool('loom_sent')} label="Loom sent" />
-                  <Toggle checked={!!f.sales_call} onChange={setBool('sales_call')} label="Sales call done" />
+                <div className="space-y-2">
+                  {/* 1st Contact */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${f.first_contact_date ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                    <div className="flex-1">
+                      <Toggle checked={!!f.first_contact_date} onChange={v=>{ if(v){setFirstContact(f.first_contact_date||today);} else {setFirstContact('');} }} label="1st Contact" />
+                    </div>
+                    <input type="date" className={inp+" w-44 flex-shrink-0"} value={f.first_contact_date||''} onChange={e=>setFirstContact(e.target.value)} />
+                  </div>
+                  {/* Message Sent */}
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">Message Sent</span>
+                      <button type="button"
+                        onClick={() => { navigator.clipboard.writeText(f.first_contact_message || ''); setCopiedMsg(true); setTimeout(() => setCopiedMsg(false), 1800); }}
+                        className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${copiedMsg ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}>
+                        {copiedMsg ? '✓ Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <textarea className={inp+" resize-none"} rows={3} value={f.first_contact_message||''} onChange={e=>set('first_contact_message')(e.target.value)} placeholder="Write the LinkedIn message you'll send..." />
+                  </div>
+                  {/* Bump 1 message suggestions */}
+                  {f.first_contact_date && (
+                    <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
+                      <p className="text-xs font-semibold text-amber-700 mb-2">💬 Bump 1 — suggested messages</p>
+                      <div className="flex flex-col gap-1.5">
+                        {BUMP1_MSGS.map((msg, i) => (
+                          <button key={i} type="button"
+                            onClick={() => { navigator.clipboard.writeText(msg); setCopied(i); setTimeout(()=>setCopied(null), 1800); }}
+                            className={`text-left text-xs px-3 py-2 rounded-lg border transition-all ${copied===i ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-white text-gray-700 hover:border-amber-300 hover:bg-amber-50'}`}>
+                            {copied===i ? '✓ Copied!' : msg}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Bump 1 */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${f.bump1 ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                    <div className="flex-1">
+                      <Toggle checked={!!f.bump1} onChange={v=>setF(p=>{const n={...p,bump1:!!v}; if(v&&!p.bump1_date) n.bump1_date=today; return n;})} label="Bump 1 – Gentle Bump" />
+                    </div>
+                    <input type="date" className={inp+" w-44 flex-shrink-0"} value={f.bump1_date||''} onChange={e=>set('bump1_date')(e.target.value)} />
+                  </div>
+                  {/* Bump 2 */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${f.bump2 ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                    <div className="flex-1">
+                      <Toggle checked={!!f.bump2} onChange={v=>setF(p=>{const n={...p,bump2:!!v}; if(v&&!p.bump2_date) n.bump2_date=today; return n;})} label="Bump 2 – Value Nudge" />
+                    </div>
+                    <input type="date" className={inp+" w-44 flex-shrink-0"} value={f.bump2_date||''} onChange={e=>set('bump2_date')(e.target.value)} />
+                  </div>
+                  {/* Bump 3 */}
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${f.bump3 ? 'bg-indigo-500' : 'bg-gray-300'}`} />
+                    <div className="flex-1">
+                      <Toggle checked={!!f.bump3} onChange={v=>setF(p=>{const n={...p,bump3:!!v}; if(v&&!p.bump3_date) n.bump3_date=today; return n;})} label="Last Shot – Final Follow Up" />
+                    </div>
+                    <input type="date" className={inp+" w-44 flex-shrink-0"} value={f.bump3_date||''} onChange={e=>set('bump3_date')(e.target.value)} />
+                  </div>
+                  {/* Response / Loom / Sales Call – clickable cards */}
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {[
+                      { key:'response',   label:'Response',   setter: v => setResponse(v) },
+                      { key:'loom_sent',  label:'Loom Sent',  setter: v => setF(p=>({...p,loom_sent:!!v})) },
+                      { key:'sales_call', label:'Sales Call', setter: v => setF(p=>({...p,sales_call:!!v})) },
+                    ].map(({key,label,setter}) => (
+                      <button key={key} type="button" onClick={()=>setter(!f[key])}
+                        className={`p-3 rounded-xl border-2 text-left transition-all ${f[key]?'border-emerald-400 bg-emerald-50':'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${f[key]?'bg-emerald-500 text-white':'bg-gray-200 text-transparent'}`}>✓</div>
+                          <span className={`text-sm font-medium ${f[key]?'text-emerald-700':'text-gray-500'}`}>{label}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -344,7 +480,7 @@
               <div>
                 <h3 className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3">Notes & Revenue</h3>
                 <div className="space-y-3">
-                  <Field label="Notes / Message Sent"><textarea className={inp+" resize-none"} rows={3} value={f.notes} onChange={e=>set('notes')(e.target.value)} placeholder="What did you send? Any context..." /></Field>
+                  <Field label="Info"><textarea className={inp+" resize-none"} rows={3} value={f.notes} onChange={e=>set('notes')(e.target.value)} placeholder="What did you send? Any context..." /></Field>
                   <Field label="Their Answer"><textarea className={inp+" resize-none"} rows={2} value={f.answer} onChange={e=>set('answer')(e.target.value)} placeholder="What did they say?" /></Field>
                   <Field label="Revenue ($)"><input type="number" className={inp} value={f.revenue} onChange={e=>set('revenue')(e.target.value)} placeholder="0" min="0" step="any" /></Field>
                 </div>
@@ -353,6 +489,9 @@
 
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 flex-shrink-0">
               <button type="button" onClick={onClose} className="px-5 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+              {!contact && onSaveAndNew && (
+                <button type="button" onClick={()=>{ if(!f.name.trim()){alert('Name is required');return;} onSaveAndNew(f); }} className="px-5 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 transition">Add &amp; New</button>
+              )}
               <button onClick={submit} className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">{contact ? 'Save Changes' : 'Add Contact'}</button>
             </div>
           </div>
@@ -391,28 +530,31 @@
     }
 
     /* ─── STATS BAR ──────────────────────────────────── */
-    function StatsBar({ contacts }) {
-      const total = contacts.length;
-      const responded = contacts.filter(c=>c.response).length;
-      const loom = contacts.filter(c=>c.loom_sent).length;
-      const calls = contacts.filter(c=>c.sales_call).length;
-      const revenue = contacts.reduce((s,c)=>s+(parseFloat(c.revenue)||0),0);
+    function StatsBar({ contacts, filterStatus, onFilterStatus, onClearFilters }) {
+      const toFollowUp = contacts.filter(c=>(c.status||'not started')==='to follow up').length;
+      const ongoing    = contacts.filter(c=>(c.status||'not started')==='ongoing').length;
+      const closed     = contacts.filter(c=>(c.status||'not started')==='closed').length;
+      const revenue    = contacts.reduce((s,c)=>s+(parseFloat(c.revenue)||0),0);
       const tiles = [
-        { label:'Total', value:total, color:'text-indigo-600' },
-        { label:'Responded', value:responded, color:'text-emerald-600' },
-        { label:'Loom Sent', value:loom, color:'text-amber-600' },
-        { label:'Sales Calls', value:calls, color:'text-blue-600' },
-        { label:'Revenue', value:fmtCurrency(revenue)||'$0', color:'text-violet-600' },
+        { label:'Total',        value:contacts.length,           color:'text-indigo-600', filter:null,           onClick: onClearFilters },
+        { label:'To Follow Up', value:toFollowUp,                color:'text-amber-600',  filter:'to follow up', onClick: ()=>onFilterStatus('to follow up') },
+        { label:'Ongoing',      value:ongoing,                   color:'text-blue-600',   filter:'ongoing',      onClick: ()=>onFilterStatus('ongoing') },
+        { label:'Closed',       value:closed,                    color:'text-emerald-600',filter:'closed',       onClick: ()=>onFilterStatus('closed') },
+        { label:'Revenue',      value:fmtCurrency(revenue)||'$0',color:'text-violet-600', filter:undefined,      onClick: null },
       ];
       return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
           <div className="grid grid-cols-5 gap-3">
-            {tiles.map(t=>(
-              <div key={t.label} className="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-3 text-center">
-                <div className={`text-2xl font-bold ${t.color}`}>{t.value}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{t.label}</div>
-              </div>
-            ))}
+            {tiles.map(t=>{
+              const active = t.filter !== undefined && filterStatus === t.filter;
+              return (
+                <div key={t.label} onClick={t.onClick||undefined}
+                  className={`bg-white rounded-xl shadow-sm border px-3 py-3 text-center transition-all ${t.onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'border-indigo-300 ring-2 ring-indigo-200' : 'border-gray-100'}`}>
+                  <div className={`text-2xl font-bold ${t.color}`}>{t.value}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{t.label}</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       );
@@ -421,24 +563,40 @@
     /* ─── MAIN APP ───────────────────────────────────── */
     function App() {
       const [contacts, setContacts] = useState(() => S.all());
-      const [search, setSearch] = useState('');
+      const [search, setSearch]           = useState('');
       const [filterSource, setFilterSource] = useState('');
-      const [filterType, setFilterType] = useState('');
-      const [modal, setModal] = useState(null);   // null | 'add' | contact obj
+      const [filterType, setFilterType]     = useState('');
+      const [filterStatus, setFilterStatus] = useState('');
+      const [filterPipeline, setFilterPipeline] = useState('');
+      const [hideDiscarded, setHideDiscarded] = useState(true);
+      const [modal, setModal]     = useState(null);
+      const [modalKey, setModalKey] = useState(0);
       const [settings, setSettings] = useState(false);
       const [enriching, setEnriching] = useState(null);
-      const [toast, setToast] = useState('');
+      const [toast, setToast]     = useState('');
       const importRef = useRef();
 
-      const refresh = () => setContacts(S.all());
+      const refresh   = () => setContacts(S.all());
       const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3500); };
 
       const filtered = contacts.filter(c => {
+        if (hideDiscarded && !filterStatus && (c.status||'not started') === 'discarded') return false;
         if (search && !`${c.name} ${c.email_or_phone} ${c.industry} ${c.linkedin_headline} ${c.linkedin_company}`.toLowerCase().includes(search.toLowerCase())) return false;
         if (filterSource && c.source !== filterSource) return false;
-        if (filterType  && c.type   !== filterType)   return false;
+        if (filterType   && c.type   !== filterType)   return false;
+        if (filterStatus && (c.status||'not started') !== filterStatus) return false;
+        if (filterPipeline) {
+          if (filterPipeline === 'pending_1st'   && !!c.first_contact_date)              return false;
+          if (filterPipeline === 'pending_bump1' && (!c.first_contact_date || !!c.bump1)) return false;
+          if (filterPipeline === 'pending_bump2' && (!c.bump1 || !!c.bump2))             return false;
+          if (filterPipeline === 'pending_bump3' && (!c.bump2 || !!c.bump3))             return false;
+          if (filterPipeline === 'all_done'      && !c.bump3)                            return false;
+        }
         return true;
       });
+
+      const clearFilters = () => { setSearch(''); setFilterSource(''); setFilterType(''); setFilterStatus(''); setFilterPipeline(''); };
+      const hasFilters = search || filterSource || filterType || filterStatus || filterPipeline;
 
       const handleSave = contact => {
         if (contact.id) S.upd(contact.id, contact);
@@ -447,47 +605,38 @@
         setModal(null);
       };
 
+      const handleSaveAndNew = contact => {
+        S.add(contact);
+        refresh();
+        setModalKey(k => k + 1);
+        setModal('add');
+      };
+
       const handleDelete = id => {
         if (!confirm('Delete this contact?')) return;
-        S.del(id);
-        refresh();
+        S.del(id); refresh();
       };
 
       const handleEnrich = async contact => {
         setEnriching(contact.id);
         const msgs = [];
-        try {
-          const li = await enrichLinkedIn(contact);
-          S.upd(contact.id, li);
-          msgs.push('✓ LinkedIn enriched');
-        } catch(e) { msgs.push('LinkedIn: '+e.message); }
-        try {
-          const ws = await enrichWebsite(contact);
-          S.upd(contact.id, ws);
-          msgs.push('✓ Website enriched');
-        } catch(e) { msgs.push('Website: '+e.message); }
-        refresh();
-        setEnriching(null);
-        showToast(msgs.join('  |  '));
+        try { const li = await enrichLinkedIn(contact); S.upd(contact.id, li); msgs.push('✓ LinkedIn enriched'); } catch(e) { msgs.push('LinkedIn: '+e.message); }
+        try { const ws = await enrichWebsite(contact);  S.upd(contact.id, ws); msgs.push('✓ Website enriched');  } catch(e) { msgs.push('Website: '+e.message); }
+        refresh(); setEnriching(null); showToast(msgs.join('  |  '));
       };
 
       const handleImport = e => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = ev => {
-          const rows = parseCSV(ev.target.result);
-          let imported = 0;
-          rows.forEach(row => {
-            const c = csvRowToContact(row);
-            if (c.name.trim()) { S.add(c); imported++; }
-          });
-          refresh();
-          showToast(`Imported ${imported} contacts`);
-          e.target.value = '';
+          const rows = parseCSV(ev.target.result); let imported = 0;
+          rows.forEach(row => { const c = csvRowToContact(row); if (c.name.trim()) { S.add(c); imported++; } });
+          refresh(); showToast(`Imported ${imported} contacts`); e.target.value = '';
         };
         reader.readAsText(file);
       };
+
+      const selectCls = "border border-gray-200 rounded-lg text-sm py-2 px-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400";
 
       return (
         <div className="min-h-screen">
@@ -508,38 +657,48 @@
           </header>
 
           {/* Stats */}
-          <StatsBar contacts={contacts} />
+          <StatsBar contacts={contacts} filterStatus={filterStatus} onFilterStatus={setFilterStatus} onClearFilters={clearFilters} />
 
           {/* Toolbar */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="relative flex-1 min-w-[180px]">
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative flex-1 min-w-[160px]">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search contacts..." value={search} onChange={e=>setSearch(e.target.value)}
                   className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
-
-              <select value={filterSource} onChange={e=>setFilterSource(e.target.value)} className="border border-gray-200 rounded-lg text-sm py-2 px-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <select value={filterSource} onChange={e=>setFilterSource(e.target.value)} className={selectCls}>
                 <option value="">All Sources</option>
                 {SOURCES.map(s=><option key={s}>{s}</option>)}
               </select>
-              <select value={filterType} onChange={e=>setFilterType(e.target.value)} className="border border-gray-200 rounded-lg text-sm py-2 px-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <select value={filterType} onChange={e=>setFilterType(e.target.value)} className={selectCls}>
                 <option value="">All Types</option>
                 {TYPES.map(t=><option key={t}>{t}</option>)}
               </select>
-
+              <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className={selectCls}>
+                <option value="">All Status</option>
+                {STATUSES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+              </select>
+              <select value={filterPipeline} onChange={e=>setFilterPipeline(e.target.value)} className={selectCls}>
+                <option value="">All Stages</option>
+                <option value="pending_1st">Pending 1st Contact</option>
+                <option value="pending_bump1">Pending Bump 1</option>
+                <option value="pending_bump2">Pending Bump 2</option>
+                <option value="pending_bump3">Pending Last Shot</option>
+                <option value="all_done">All Bumps Done</option>
+              </select>
+              <button onClick={hasFilters ? clearFilters : undefined} title="Clear filters"
+                className={`w-8 h-9 flex items-center justify-center rounded-lg border text-sm font-bold transition flex-shrink-0 ${hasFilters ? 'border-gray-200 bg-white text-gray-500 hover:bg-gray-100 hover:text-gray-700 cursor-pointer' : 'border-transparent text-gray-200 cursor-default'}`}>✕</button>
+              <button onClick={()=>setHideDiscarded(h=>!h)} title={hideDiscarded?'Show discarded':'Hide discarded'}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition flex-shrink-0 ${hideDiscarded ? 'border-red-200 bg-red-50 text-red-400 hover:bg-red-100' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>
+                {hideDiscarded ? '🚫 Discarded' : '👁 Discarded'}
+              </button>
               <label className="cursor-pointer flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
                 📥 Import CSV
                 <input ref={importRef} type="file" accept=".csv" onChange={handleImport} className="hidden" />
               </label>
-
-              <button onClick={()=>exportCSV(contacts)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-                📤 Export CSV
-              </button>
-
-              <button onClick={()=>setModal('add')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 transition ml-auto">
-                + Add Contact
-              </button>
+              <button onClick={()=>exportCSV(contacts)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-200 bg-white shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition">📤 Export CSV</button>
+              <button onClick={()=>setModal('add')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 transition ml-auto">+ Add Contact</button>
             </div>
           </div>
 
@@ -548,40 +707,32 @@
             {filtered.length === 0 ? (
               <div className="text-center py-20">
                 <div className="text-5xl mb-4">{contacts.length===0?'📋':'🔍'}</div>
-                <p className="text-gray-400 text-lg font-medium">{contacts.length===0?'No contacts yet':'No contacts match your search'}</p>
-                {contacts.length===0 && (
-                  <button onClick={()=>setModal('add')} className="mt-6 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 transition">+ Add First Contact</button>
-                )}
+                <p className="text-gray-400 text-lg font-medium">{contacts.length===0?'No contacts yet':'No contacts match your filters'}</p>
+                {contacts.length===0 && <button onClick={()=>setModal('add')} className="mt-6 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 transition">+ Add First Contact</button>}
+                {contacts.length>0 && hasFilters && <button onClick={clearFilters} className="mt-4 text-sm text-indigo-500 hover:underline">Clear filters</button>}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {filtered.map(c=>(
-                  <ContactCard key={c.id} contact={c}
-                    onEdit={c=>setModal(c)}
-                    onDelete={handleDelete}
-                    onEnrich={handleEnrich}
-                    enriching={enriching===c.id}
-                  />
-                ))}
+              <div>
+                {hasFilters && <p className="text-xs text-gray-400 mb-3">Showing {filtered.length} of {contacts.length} contacts</p>}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {filtered.map(c=>(
+                    <ContactCard key={c.id} contact={c}
+                      onEdit={c=>setModal(c)}
+                      onDelete={handleDelete}
+                      onEnrich={handleEnrich}
+                      enriching={enriching===c.id}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
 
           {/* Toast */}
-          {toast && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-full shadow-xl z-50 max-w-lg text-center">
-              {toast}
-            </div>
-          )}
+          {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-5 py-3 rounded-full shadow-xl z-50 max-w-lg text-center">{toast}</div>}
 
           {/* Modals */}
-          {modal && (
-            <ContactModal
-              contact={modal==='add' ? null : modal}
-              onSave={handleSave}
-              onClose={()=>setModal(null)}
-            />
-          )}
+          {modal && <ContactModal key={modalKey} contact={modal==='add'?null:modal} onSave={handleSave} onSaveAndNew={modal==='add'?handleSaveAndNew:null} onClose={()=>setModal(null)} />}
           {settings && <SettingsModal onClose={()=>setSettings(false)} />}
         </div>
       );
