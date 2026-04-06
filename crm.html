@@ -12,6 +12,7 @@
     .lc2 { overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
     .spin { animation: spin 1s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .loader { width: 40px; height: 40px; border: 4px solid #e0e7ff; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; }
     .modal-bg { background: rgba(0,0,0,0.45); backdrop-filter: blur(4px); }
   </style>
 </head>
@@ -50,6 +51,27 @@
       del:  (id)    => S.save(S.all().filter(c=>c.id!==id)),
       getSetting: k   => localStorage.getItem('crm_'+k)||'',
       setSetting: (k,v) => localStorage.setItem('crm_'+k, v),
+    };
+
+    /* ─── GOOGLE SHEETS SYNC ────────────────────────── */
+    const Sheets = {
+      async push(url, contacts) {
+        if (!url) return null;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'sync', contacts }),
+          redirect: 'follow',
+        });
+        const text = await res.text();
+        try { return JSON.parse(text); } catch { return { success: true }; }
+      },
+      async pull(url) {
+        if (!url) return null;
+        const res = await fetch(url);
+        const text = await res.text();
+        return JSON.parse(text);
+      },
     };
 
     /* ─── ENRICH ─────────────────────────────────────── */
@@ -500,9 +522,58 @@
     }
 
     /* ─── SETTINGS MODAL ─────────────────────────────── */
-    function SettingsModal({ onClose }) {
+    function SettingsModal({ onClose, onPull, doSync }) {
       const [key, setKey] = useState(S.getSetting('proxycurl_key'));
-      const save = () => { S.setSetting('proxycurl_key', key.trim()); onClose(); };
+      const [sheetsUrl, setSheetsUrl] = useState(S.getSetting('sheets_url'));
+      const [testResult, setTestResult] = useState(null);
+      const [pulling, setPulling] = useState(false);
+
+      const save = () => {
+        S.setSetting('proxycurl_key', key.trim());
+        S.setSetting('sheets_url', sheetsUrl.trim());
+        onClose();
+        if (sheetsUrl.trim()) setTimeout(doSync, 100);
+      };
+
+      const handleTestSync = async () => {
+        const url = sheetsUrl.trim();
+        if (!url) { setTestResult({ ok: false, msg: 'Enter a URL first' }); return; }
+        setTestResult({ ok: null, msg: 'Syncing...' });
+        try {
+          S.setSetting('sheets_url', url);
+          const res = await Sheets.push(url, S.all());
+          if (res && res.success) {
+            setTestResult({ ok: true, msg: '✓ Synced ' + (res.count||0) + ' contacts to Sheets' });
+          } else {
+            setTestResult({ ok: true, msg: '✓ Request sent — check your Google Sheet' });
+          }
+        } catch (e) {
+          setTestResult({ ok: false, msg: 'Error: ' + e.message });
+        }
+      };
+
+      const handlePull = async () => {
+        const url = sheetsUrl.trim();
+        if (!url) { alert('Enter the Google Apps Script URL first'); return; }
+        if (!confirm('Refresh all contacts from Google Sheets?\n\nThis will replace local data with the latest from your Sheet.')) return;
+        setPulling(true);
+        try {
+          S.setSetting('sheets_url', url);
+          const data = await Sheets.pull(url);
+          if (data && data.contacts && data.contacts.length > 0) {
+            S.save(data.contacts);
+            onPull();
+            alert('✓ Loaded ' + data.contacts.length + ' contacts from Google Sheets');
+            onClose();
+          } else {
+            alert('No contacts found in Google Sheets.\nMake sure the CRM tab has data.');
+          }
+        } catch (e) {
+          alert('Error pulling from Sheets:\n' + e.message);
+        }
+        setPulling(false);
+      };
+
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-bg">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
@@ -510,14 +581,33 @@
               <h2 className="text-white font-bold text-lg">⚙ Settings</h2>
               <button onClick={onClose} className="text-white/70 hover:text-white text-xl">✕</button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-5">
+              {/* Proxycurl */}
               <div>
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Proxycurl API Key</label>
-                <p className="text-xs text-gray-400 mt-1 mb-2">Used to auto-fill LinkedIn profile photo, headline & company. Get a free key (10 credits) at <strong>nubela.co/proxycurl</strong></p>
+                <p className="text-xs text-gray-400 mt-1 mb-2">Used for LinkedIn enrichment. Free key (10 credits) at <strong>nubela.co/proxycurl</strong></p>
                 <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono" value={key} onChange={e=>setKey(e.target.value)} placeholder="pk_..." />
               </div>
+
+              {/* Google Sheets Sync */}
+              <div className="border-t border-gray-100 pt-5">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wide">Google Sheets Sync</label>
+                <p className="text-xs text-gray-400 mt-1 mb-2">Paste your Google Apps Script URL to auto-sync contacts to a Google Sheet.</p>
+                <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono" value={sheetsUrl} onChange={e=>setSheetsUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" />
+                {testResult && (
+                  <p className={`text-xs mt-2 ${testResult.ok === true ? 'text-emerald-600' : testResult.ok === false ? 'text-red-500' : 'text-gray-400'}`}>{testResult.msg}</p>
+                )}
+                <div className="flex gap-2 mt-3">
+                  <button type="button" onClick={handleTestSync} className="flex-1 px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-semibold hover:bg-indigo-100 transition">⬆ Sync to Sheets</button>
+                  <button type="button" onClick={handlePull} disabled={pulling} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 text-xs font-semibold hover:bg-gray-100 transition disabled:opacity-50">{pulling ? '⏳ Refreshing...' : '⬇ Refresh from Sheets'}</button>
+                </div>
+              </div>
+
               <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-700">
-                <strong>Your data is stored locally</strong> in your browser (localStorage). It never leaves your computer. To back up, use Export CSV.
+                {sheetsUrl.trim()
+                  ? <><strong>Google Sheets is your primary database.</strong> Contacts are loaded from Sheets on startup. Changes sync automatically. Local cache keeps the UI fast.</>
+                  : <><strong>Your data is stored locally</strong> in your browser (localStorage). Add a Google Sheets URL above to use Sheets as your primary database.</>
+                }
               </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
@@ -525,6 +615,15 @@
               <button onClick={save} className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Save</button>
             </div>
           </div>
+        </div>
+      );
+    }
+
+    function LoadingScreen() {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center" style={{background:'#f8fafc'}}>
+          <div className="loader mb-4"></div>
+          <p className="text-indigo-600 font-semibold text-base">Syncing</p>
         </div>
       );
     }
@@ -574,10 +673,47 @@
       const [settings, setSettings] = useState(false);
       const [enriching, setEnriching] = useState(null);
       const [toast, setToast]     = useState('');
+      const [syncStatus, setSyncStatus] = useState(null);
+      const [loading, setLoading] = useState(() => !!S.getSetting('sheets_url'));
+      const [loadError, setLoadError] = useState(null);
+      const [sheetsSynced, setSheetsSynced] = useState(false);
       const importRef = useRef();
 
       const refresh   = () => setContacts(S.all());
       const showToast = msg => { setToast(msg); setTimeout(()=>setToast(''),3500); };
+
+      const doSync = () => {
+        const url = S.getSetting('sheets_url');
+        if (!url) return;
+        setSyncStatus('syncing');
+        Sheets.push(url, S.all()).then(() => {
+          setSyncStatus('ok');
+          setTimeout(() => setSyncStatus(null), 3000);
+        }).catch(e => {
+          console.error('Sheets sync:', e);
+          setSyncStatus('error');
+          setTimeout(() => setSyncStatus(null), 5000);
+        });
+      };
+
+      // Initial pull from Google Sheets on mount
+      useEffect(() => {
+        const url = S.getSetting('sheets_url');
+        if (!url) { setLoading(false); return; }
+        Sheets.pull(url)
+          .then(data => {
+            if (data && data.contacts && data.contacts.length > 0) {
+              S.save(data.contacts);
+              setContacts(data.contacts);
+            }
+            setSheetsSynced(true);
+          })
+          .catch(err => {
+            console.error('Sheets pull failed:', err);
+            setLoadError('Could not reach Google Sheets \u2014 showing cached data');
+          })
+          .finally(() => setLoading(false));
+      }, []);
 
       const filtered = contacts.filter(c => {
         if (hideDiscarded && !filterStatus && (c.status||'not started') === 'discarded') return false;
@@ -603,6 +739,7 @@
         else S.add(contact);
         refresh();
         setModal(null);
+        doSync();
       };
 
       const handleSaveAndNew = contact => {
@@ -610,11 +747,12 @@
         refresh();
         setModalKey(k => k + 1);
         setModal('add');
+        doSync();
       };
 
       const handleDelete = id => {
         if (!confirm('Delete this contact?')) return;
-        S.del(id); refresh();
+        S.del(id); refresh(); doSync();
       };
 
       const handleEnrich = async contact => {
@@ -622,7 +760,7 @@
         const msgs = [];
         try { const li = await enrichLinkedIn(contact); S.upd(contact.id, li); msgs.push('✓ LinkedIn enriched'); } catch(e) { msgs.push('LinkedIn: '+e.message); }
         try { const ws = await enrichWebsite(contact);  S.upd(contact.id, ws); msgs.push('✓ Website enriched');  } catch(e) { msgs.push('Website: '+e.message); }
-        refresh(); setEnriching(null); showToast(msgs.join('  |  '));
+        refresh(); setEnriching(null); showToast(msgs.join('  |  ')); doSync();
       };
 
       const handleImport = e => {
@@ -631,12 +769,14 @@
         reader.onload = ev => {
           const rows = parseCSV(ev.target.result); let imported = 0;
           rows.forEach(row => { const c = csvRowToContact(row); if (c.name.trim()) { S.add(c); imported++; } });
-          refresh(); showToast(`Imported ${imported} contacts`); e.target.value = '';
+          refresh(); showToast(`Imported ${imported} contacts`); e.target.value = ''; doSync();
         };
         reader.readAsText(file);
       };
 
       const selectCls = "border border-gray-200 rounded-lg text-sm py-2 px-3 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400";
+
+      if (loading) return <LoadingScreen />;
 
       return (
         <div className="min-h-screen">
@@ -649,12 +789,28 @@
                 </div>
                 <div>
                   <h1 className="text-white font-bold text-xl leading-tight">CRM LinkedIn</h1>
-                  <p className="text-indigo-200 text-xs">{contacts.length} contacts · data stored locally</p>
+                  <p className="text-indigo-200 text-xs">{contacts.length} contacts · {sheetsSynced ? 'synced with Google Sheets' : 'data stored locally'}</p>
                 </div>
               </div>
-              <button onClick={()=>setSettings(true)} className="text-white/70 hover:text-white text-xl transition" title="Settings">⚙</button>
+              <div className="flex items-center gap-3">
+                {syncStatus === 'syncing' && <span className="text-white/50 text-xs spin" title="Syncing to Google Sheets...">⟳ Syncing</span>}
+                {syncStatus === 'ok' && <span className="text-emerald-300 text-xs" title="Synced to Google Sheets">✓ Synced</span>}
+                {syncStatus === 'error' && <span className="text-red-300 text-xs" title="Sync failed — check Settings">✗ Sync error</span>}
+                <button onClick={()=>setSettings(true)} className="text-white/70 hover:text-white text-xl transition" title="Settings">⚙</button>
+              </div>
             </div>
           </header>
+
+          {/* Sheets error banner */}
+          {loadError && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3">
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                <span>⚠</span>
+                <span className="flex-1">{loadError}</span>
+                <button onClick={() => setLoadError(null)} className="text-amber-400 hover:text-amber-600 font-bold">✕</button>
+              </div>
+            </div>
+          )}
 
           {/* Stats */}
           <StatsBar contacts={contacts} filterStatus={filterStatus} onFilterStatus={setFilterStatus} onClearFilters={clearFilters} />
@@ -733,7 +889,7 @@
 
           {/* Modals */}
           {modal && <ContactModal key={modalKey} contact={modal==='add'?null:modal} onSave={handleSave} onSaveAndNew={modal==='add'?handleSaveAndNew:null} onClose={()=>setModal(null)} />}
-          {settings && <SettingsModal onClose={()=>setSettings(false)} />}
+          {settings && <SettingsModal onClose={()=>setSettings(false)} onPull={refresh} doSync={doSync} />}
         </div>
       );
     }
